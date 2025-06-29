@@ -71,7 +71,7 @@ fun UserDashboardScreen(
     // --- PERUBAHAN DIMULAI: Implementasi Modal Bottom Sheet untuk Filter ---
     // Daftar kategori untuk filter
     val categories = remember {
-        listOf("All Categories", "Sword", "Gadget & Technology", "Furniture", "Games", "Books")
+        listOf("All Categories", "Sword", "Gadget & Technology", "Furniture", "Games", "Books","Other")
     }
     // State untuk mengontrol apakah dropdown kategori terbuka atau tidak
     var isCategoryDropdownExpanded by remember { mutableStateOf(false) }

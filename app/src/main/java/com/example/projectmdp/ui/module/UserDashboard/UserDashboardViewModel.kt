@@ -93,21 +93,23 @@ open class UserDashboardViewModel @Inject constructor(
     // --- INI FUNGSI YANG PERLU ANDA TAMBAHKAN ATAU PASTIKAN ADA ---
     fun filterProductsByCategory(category: String) {
         selectedCategory = category // Simpan kategori yang dipilih
-        searchQuery = "" // Hapus query pencarian untuk menghindari konflik
-
+        // Jika "All Categories" dipilih, muat semua produk.
         if (category == "All Categories") {
             loadProducts(forceRefresh = true)
             return
         }
 
+        // Hapus query pencarian untuk menghindari konflik
+        searchQuery = ""
+
         Log.d("UserDashboardViewModel", "Filtering products by category: $category")
         viewModelScope.launch {
             isLoading = true
             try {
-                // Panggil repository untuk mendapatkan produk berdasarkan kategori
+                // Panggil fungsi repository yang benar (yang memanggil DAO)
                 productRepository.getProductsByCategory(category).collectLatest { result ->
                     result.fold(
-                        onSuccess = { filteredProducts: List<Product> ->
+                        onSuccess = { filteredProducts ->
                             products = filteredProducts
                             Log.d("UserDashboardViewModel", "Filter completed: ${filteredProducts.size} products found for '$category'")
                         },
@@ -126,20 +128,18 @@ open class UserDashboardViewModel @Inject constructor(
         }
     }
 
-
     private fun loadProductsWithRepository(forceRefresh: Boolean) {
         viewModelScope.launch {
             isLoading = true
             try {
+                // Ganti dengan implementasi Anda yang sebenarnya, misalnya:
                 productRepository.getAllProducts(forceRefresh = forceRefresh).collectLatest { result ->
                     result.fold(
-                        onSuccess = { productWithPagination -> // Kita beri nama yang jelas: ini adalah ProductWithPagination
-                            // --- PERBAIKAN DI SINI ---
-                            // Ambil daftar produk DARI DALAM objek productWithPagination
-                            products = productWithPagination.products
-                            Log.d("UserDashboardViewModel", "All products loaded: ${productWithPagination.products.size}")
+                        onSuccess = { allProducts -> // Asumsi ini mengembalikan List<Product>
+                            products = allProducts
+                            Log.d("UserDashboardViewModel", "Products loaded: ${products.size}")
                         },
-                        onFailure = { error: Throwable ->
+                        onFailure = { error ->
                             Log.e("UserDashboardViewModel", "Failed to load products: ${error.message}", error)
                             products = emptyList()
                         }
