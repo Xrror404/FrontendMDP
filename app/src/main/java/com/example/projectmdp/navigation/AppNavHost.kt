@@ -16,6 +16,7 @@ import com.example.projectmdp.ui.module.login.LoginScreen
 import com.example.projectmdp.ui.module.register.RegisterScreen
 import com.example.projectmdp.ui.module.UserDashboard.UserDashboardScreen
 import com.example.projectmdp.ui.module.chat.ChatScreen
+import com.example.projectmdp.ui.module.Midtrans.MidtransScreen
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 
@@ -79,6 +80,25 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
                 navController = navController,
                 currentUserId = currentUser ?: ""
             )
+        }
+        composable(
+            route = Routes.MIDTRANS,
+            arguments = listOf(
+                navArgument("productId") { type = NavType.StringType },
+                navArgument("price") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val productId = backStackEntry.arguments?.getString("productId")
+            val price = backStackEntry.arguments?.getString("price")?.toDoubleOrNull()
+
+            if (productId != null && price != null) {
+                MidtransScreen(
+                    navController = navController,
+                    productId = productId
+                )
+            } else {
+                Text("Error: Missing product ID or price.")
+            }
         }
     }
 }

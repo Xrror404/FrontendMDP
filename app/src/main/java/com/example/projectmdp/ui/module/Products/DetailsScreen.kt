@@ -38,6 +38,7 @@ import android.widget.Toast // <--- ADD THIS IMPORT for toast messages
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Email
+import com.example.projectmdp.navigation.Routes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,7 +84,14 @@ fun DetailsScreen(
                 ) {
                     Button(
                         onClick = {
-                            // TODO: Add your actual Buy Now navigation/logic here
+                            product?.let {
+                                navController.navigate(
+                                    Routes.midtransRoute(
+                                        productId = it.product_id,
+                                        price = it.price
+                                    )
+                                )
+                            }
                         },
                         modifier = Modifier.weight(1f), // Take equal weight
                         shape = RoundedCornerShape(12.dp),
