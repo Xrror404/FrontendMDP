@@ -1,6 +1,5 @@
 package com.example.projectmdp.data.repository
 
-import android.util.Log
 import com.example.projectmdp.data.source.dataclass.ChatMessage
 import com.example.projectmdp.data.source.dataclass.ChatPagination
 import com.example.projectmdp.data.source.dataclass.Conversation
@@ -46,15 +45,14 @@ fun com.example.projectmdp.data.source.response.ChatPagination.toChatPagination(
     )
 }
 
-// This maps from the response.Conversation to your dataclass.Conversation
 fun com.example.projectmdp.data.source.response.Conversation.toConversation(): Conversation {
     return Conversation(
         otherUserId = this.otherUserId,
-        otherUser = this.otherUser?.let {
+        otherUser = this.otherUser?.let { 
             User(
                 id = it.id,
                 email = it.email,
-                username = it.name, // Maps 'name' from response to 'username' in your UI model
+                username = it.name,
                 address = "",
                 phone_number = "",
                 role = "buyer",
@@ -90,37 +88,22 @@ fun com.example.projectmdp.data.source.response.OtherUser.toChatUser(): User {
 
 @Singleton
 class ChatRepository @Inject constructor(
-//    private val chatApi: ChatApi // Commented out
+//    private val chatApi: ChatApi
+    // Note: Chat biasanya real-time, jadi tidak perlu local storage
 ) {
 
-    suspend fun getUserConversations(): Flow<Result<List<Conversation>>> = flow { // Returns dataclass.Conversation
+    suspend fun getUserConversations(): Flow<Result<List<Conversation>>> = flow {
         try {
             val response = RetrofitInstance.Chatapi.getUserConversations()
-            Log.d("ChatRepository", "API Response: $response")
-
             if (response.isSuccess()) {
-                // response.data here refers to the GetUserConversationsData object (from ChatApi.kt)
-                response.data?.let { getUserConversationsData -> // This is now GetUserConversationsData
-                    Log.d("ChatRepository", "Parsed GetUserConversationsData: $getUserConversationsData")
-
-                    // CORRECTED LINE: Access 'conversations' directly from getUserConversationsData
-                    // The inner 'data' field has been removed from GetUserConversationsData.
-                    getUserConversationsData.conversations.map { it.toConversation() }.let { conversationsList ->
-                        Log.d("ChatRepository", "Found conversations list: $conversationsList")
-                        emit(Result.success(conversationsList)) // Emit the list directly
-                    }
-                } ?: run {
-                    val errorMessage = response.message ?: "API response data (GetUserConversationsData) is null."
-                    Log.e("ChatRepository", "Error: $errorMessage")
-                    emit(Result.failure(Exception(errorMessage)))
-                }
+                response.data?.let { responseData ->
+                    val conversations = responseData.data.conversations.map { it.toConversation() }
+                    emit(Result.success(conversations))
+                } ?: emit(Result.failure(Exception("No data received")))
             } else {
-                val errorMessage = response.error ?: "Unknown error from API."
-                Log.e("ChatRepository", "API call failed: $errorMessage")
-                emit(Result.failure(Exception(errorMessage)))
+                emit(Result.failure(Exception(response.error ?: "Unknown error")))
             }
         } catch (e: Exception) {
-            Log.e("ChatRepository", "Exception in getUserConversations: ${e.message}", e)
             emit(Result.failure(e))
         }
     }
@@ -129,24 +112,19 @@ class ChatRepository @Inject constructor(
         try {
             val response = RetrofitInstance.Chatapi.getConversation(userId, page, limit)
             if (response.isSuccess()) {
-                val data = response.data // Here, response.data is GetConversationData?
-                if (data?.messages != null) {
-                    Log.d("ChatRepository", "Received messages: ${data.messages}")
+                val data = response.data?.data
+                if (data != null) {
                     val messages = data.messages.map { it.toChatMessage() }
                     val pagination = data.pagination.toChatPagination()
                     val otherUser = data.otherUser.toChatUser()
                     val chatMessages = ChatMessages(messages, pagination, otherUser)
                     emit(Result.success(chatMessages))
                 } else {
-                    Log.d("ChatRepository", "No messages received")
+                    // 🔁 If no conversation data, start a new one with empty message
                     val startResponse = RetrofitInstance.Chatapi.startChat(StartChatRequest(userId, ""))
-                    Log.d("ChatRepository", "Start response: $startResponse")
                     if (startResponse.isSuccess()) {
-                        Log.d("ChatRepository", "Starting new chat")
-                        val startData = startResponse.data // Here, startResponse.data is StartChatData?
-                        Log.d("ChatRepository", "Start data: $startData")
+                        val startData = startResponse.data?.data
                         if (startData != null) {
-                            Log.d("ChatRepository", "Starting new chat with ID: ${startData.chat_id}")
                             val chatMessage = ChatMessage(
                                 id = startData.chat_id,
                                 user_sender = startData.sender_id,
@@ -158,7 +136,7 @@ class ChatRepository @Inject constructor(
                                 updated_at = null,
                                 deleted_at = null
                             )
-                            val otherUser = startData.receiver?.toChatUser()
+                            val otherUser = startData.receiver?.toChatUser() // optional, based on your API
                             val chatMessages = ChatMessages(
                                 messages = listOf(chatMessage),
                                 pagination = ChatPagination(1, 1, 1, false, false, limit),
@@ -166,11 +144,9 @@ class ChatRepository @Inject constructor(
                             )
                             emit(Result.success(chatMessages))
                         } else {
-                            val message = startResponse.error ?: "Unknown error occurred"
-                            emit(Result.failure(Exception(message)))
+                            emit(Result.failure(Exception("Failed to start new chat.")))
                         }
                     } else {
-                        Log.e("ChatRepository", "Failed to start new chat: ${startResponse.error}")
                         emit(Result.failure(Exception(startResponse.error ?: "Failed to create chat.")))
                     }
                 }
@@ -188,15 +164,15 @@ class ChatRepository @Inject constructor(
             val request = StartChatRequest(receiverId, message)
             val response = RetrofitInstance.Chatapi.startChat(request)
             if (response.isSuccess()) {
-                response.data?.let { responseData -> // Here, responseData is StartChatData?
+                response.data?.let { responseData ->
                     val chatMessage = ChatMessage(
-                        id = responseData.chat_id,
-                        user_sender = responseData.sender_id,
-                        user_receiver = responseData.receiver_id,
-                        chat = responseData.message,
-                        datetime = responseData.datetime,
-                        status = responseData.status,
-                        created_at = responseData.datetime,
+                        id = responseData.data.chat_id,
+                        user_sender = responseData.data.sender_id,
+                        user_receiver = responseData.data.receiver_id,
+                        chat = responseData.data.message,
+                        datetime = responseData.data.datetime,
+                        status = responseData.data.status,
+                        created_at = responseData.data.datetime,
                         updated_at = null,
                         deleted_at = null
                     )
@@ -235,5 +211,5 @@ class ChatRepository @Inject constructor(
         } catch (e: Exception) {
             emit(Result.failure(e))
         }
-        }
+    }
 }

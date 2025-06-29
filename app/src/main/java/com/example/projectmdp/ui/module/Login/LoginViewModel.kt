@@ -56,10 +56,6 @@ class LoginViewModel @Inject constructor(
         _errorMessage.value = null
     }
 
-    fun deleteAutoLogin(){
-        sessionManager.clearToken()
-    }
-
     fun checkAutoLogin() {
         val savedToken = sessionManager.getToken()
         if (!savedToken.isNullOrBlank()) {
@@ -71,7 +67,7 @@ class LoginViewModel @Inject constructor(
                     val response = authRepository.verifyToken(VerifyTokenRequest(savedToken))
                     val userRole = response.data?.user?.role
 
-                    _navigationEvent.emit(Routes.USER_DASHBOARD)
+                        _navigationEvent.emit(Routes.USER_DASHBOARD)
 
                 } catch (e: Exception) {
                     Log.e("AutoLogin", "Failed: ${e.message}")

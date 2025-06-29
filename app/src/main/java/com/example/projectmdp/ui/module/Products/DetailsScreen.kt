@@ -83,7 +83,7 @@ fun DetailsScreen(
                 ) {
                     Button(
                         onClick = {
-                            navController.navigate("TRANSACTION")
+                            // TODO: Add your actual Buy Now navigation/logic here
                         },
                         modifier = Modifier.weight(1f), // Take equal weight
                         shape = RoundedCornerShape(12.dp),
