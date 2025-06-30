@@ -13,7 +13,10 @@ import com.example.projectmdp.data.source.dataclass.User
 import com.example.projectmdp.data.source.remote.RetrofitInstance
 import com.example.projectmdp.data.source.remote.VerifyTokenRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 import java.text.SimpleDateFormat
@@ -53,25 +56,35 @@ class ChatViewModel @Inject constructor(
     var paginationInfo by mutableStateOf<ChatMessages?>(null)
         private set
 
-    private var currentUserId: String = "CURRENT_USER_ID" // replace this with real one
+    private var currentUserId: String = "CURRENT_USER_ID" // replace this with real one if not set by setCurrentUserId
 
-    fun loadConversation(receiverId: String, page: Int = 1, limit: Int = 50) {
+    private var refreshJob: Job? = null
+
+    private var activeReceiverId: String? = null
+
+    fun fetchChatHistory(receiverId: String, page: Int = 1, limit: Int = 50) {
         isLoading = true
         errorMessage = null
-        Log.d("ChatViewModel", "Loading conversation with receiverId=$receiverId, page=$page, limit=$limit")
+        Log.d("ChatViewModel", "Fetching chat history with receiverId=$receiverId, page=$page, limit=$limit")
 
         viewModelScope.launch {
             chatRepository.getConversation(receiverId, page, limit).collectLatest { result ->
-                isLoading = false
+                isLoading = false // Set isLoading to false after the API call, regardless of success/failure
                 result.onSuccess { chatMessages ->
                     Log.d("ChatViewModel", "Received ${chatMessages.messages.size} messages")
-                    Log.d("ChatViewModel", "Current user ID when loading messages: $currentUserId")
-                    messages.clear()
-                    messages.addAll(chatMessages.messages)
+                    Log.d("ChatViewModel", "Current user ID when fetching messages: $currentUserId")
+
+                    // Only update messages if it's the first load or if messages have changed
+                    // This prevents unnecessary recompositions if data is identical.
+                    if (messages != chatMessages.messages) {
+                        messages.clear()
+                        messages.addAll(chatMessages.messages)
+                    }
+
                     otherUserName = chatMessages.otherUser?.username ?: "Unknown"
                     otherUserProfile = chatMessages.otherUser?.profile_picture
                     paginationInfo = chatMessages
-                    
+
                     // Debug: Print message senders
                     chatMessages.messages.forEach { msg ->
                         Log.d("ChatViewModel", "Message ${msg.id}: sender=${msg.user_sender}, content=${msg.chat.take(20)}")
@@ -85,8 +98,28 @@ class ChatViewModel @Inject constructor(
                         }
                         else -> error.localizedMessage ?: "Unknown error"
                     }
-                    Log.e("ChatViewModel", "Error loading conversation", error)
+                    Log.e("ChatViewModel", "Error fetching chat history", error)
                 }
+            }
+        }
+    }
+
+    // New function to start/restart the conversation loading with periodic refresh
+    fun startChatConversation(receiverId: String, page: Int = 1, limit: Int = 50) {
+        activeReceiverId = receiverId // Store the current receiver ID
+        // Cancel any existing refresh job before starting a new one
+        refreshJob?.cancel()
+        refreshJob = null // Clear the job
+
+        // Start the initial load immediately
+        fetchChatHistory(receiverId, page, limit)
+
+        // Start the periodic refresh job
+        refreshJob = viewModelScope.launch {
+            while (isActive) { // Keep refreshing as long as the coroutine is active
+                delay(15000) // Wait for 5 seconds
+                Log.d("ChatViewModel", "Performing periodic refresh for receiverId=$receiverId")
+                fetchChatHistory(receiverId, page, limit) // Re-fetch the chat history
             }
         }
     }
@@ -95,31 +128,48 @@ class ChatViewModel @Inject constructor(
         if (messageText.isBlank()) return
 
         val tempMessage = ChatMessage(
-            id = "temp_${System.currentTimeMillis()}",
+            id = "temp_${System.currentTimeMillis()}", // Use a temporary client-side ID
             user_sender = currentUserId,
             user_receiver = receiverId,
             chat = messageText,
             datetime = getCurrentIsoTime(),
-            status = "sent",
+            status = "sending", // Indicate that it's being sent
             created_at = getCurrentIsoTime()
         )
         Log.d("ChatViewModel", "Yang ngirim id nya ${tempMessage.user_sender}")
 
-        messages.add(tempMessage)
+        // Add the temporary message for optimistic UI update
+        // We'll add it to the top if reverseLayout is true in LazyColumn
+        messages.add(0, tempMessage) // Add to top for reverseLayout in ChatScreen
+        // Ensure messages are sorted if you're not solely relying on reverseLayout
+        // messages.sortByDescending { it.datetime } // You might need this if ordering isn't guaranteed by add(0, ...)
+
         isSending = true
 
         viewModelScope.launch {
             chatRepository.startChat(receiverId, messageText).collectLatest { result ->
                 isSending = false
                 result.onSuccess { sentMessage ->
-                    // Remove temp and insert real message
-                    messages.remove(tempMessage)
-                    // Pastikan pesan yang dikembalikan server memiliki user_sender yang benar
+                    // Find and update the temporary message with the real one from the server
+                    val index = messages.indexOfFirst { it.id == tempMessage.id }
+                    if (index != -1) {
+                        messages[index] = sentMessage.copy(status = "sent") // Update status if needed
+                    } else {
+                        // If somehow the temp message isn't found (e.g., race condition), just add the new one
+                        messages.add(0, sentMessage) // Add new message at the top
+                    }
+                    messages.sortByDescending { it.datetime } // Re-sort after update
 
-                    messages.add(sentMessage)
+                    // Trigger an immediate refresh after sending to ensure message status
+                    // or any server-side updates are reflected quickly.
+                    activeReceiverId?.let { fetchChatHistory(it) }
+
                 }.onFailure {
-                    // Jika gagal, hapus temp message dan tampilkan error
-                    messages.remove(tempMessage)
+                    // If failed, remove temp message and show error
+                    val index = messages.indexOfFirst { it.id == tempMessage.id }
+                    if (index != -1) {
+                        messages.removeAt(index)
+                    }
                     errorMessage = it.localizedMessage ?: "Failed to send message"
                     Log.e("ChatViewModel", "Error sending message", it)
                 }
@@ -138,6 +188,7 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // Kirim token ke backend untuk verifikasi dan ambil user doc ID
+                // Assuming `id` here is the Firebase UID passed from ChatScreen
                 val response = RetrofitInstance.Userapi.getUserByFirebaseUid(id)
 
                 val userId = response.data?.publicProfile?.id
@@ -145,7 +196,7 @@ class ChatViewModel @Inject constructor(
 
                 if (userId == null) {
                     errorMessage = "Gagal memuat data user dari token."
-                    Log.e("ChatViewModel", "User ID is null in verifyToken response")
+                    Log.e("ChatViewModel", "User ID is null in getUserByFirebaseUid response")
                     return@launch
                 }
 
@@ -172,27 +223,14 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-//        Log.d("ChatViewModel", "Current user ID set to: $currentUserId")
-//        viewModelScope.launch {
-//            // Get current user info from repository if needed
-//            userRepository.getUserById(id).collect { result ->
-//                result.onSuccess { user ->
-//                    _currentUser.value = user
-//                    currentUserId = id
-//                    Log.d("ChatViewModel", "Current user loaded: ${user.username}")
-//                }.onFailure { e ->
-//                    Log.e("ChatViewModel", "Failed to load current user", e)
-//                }
-//            }
-//        }
-//    }
-
     fun updateCurrentUser(user: User) {
         _currentUser.value = user
         currentUserId = user.id
     }
 
     fun isMessageFromCurrentUser(message: ChatMessage): Boolean {
+        // currentUserId needs to be properly set before this function is called.
+        // It's set in `setCurrentUserId`.
         val isFromCurrent = message.user_sender == currentUserId
         Log.d("ChatViewModel", "Message ${message.id}: sender=${message.user_sender}, currentUser=$currentUserId, isFromCurrent=$isFromCurrent")
         return isFromCurrent
@@ -223,6 +261,7 @@ class ChatViewModel @Inject constructor(
             val outputFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
             outputFormat.format(date ?: Date())
         } catch (e: Exception) {
+            Log.e("ChatViewModel", "Error parsing datetime: $datetime", e)
             datetime.substring(11, 16) // fallback to simple substring
         }
     }
@@ -231,16 +270,22 @@ class ChatViewModel @Inject constructor(
         errorMessage = null
     }
 
-    // Helper function untuk debugging
+    // Helper function for debugging
     fun debugCurrentUserId(): String = currentUserId
-    
-    // Helper function untuk memastikan message ordering
-    private fun addMessageSorted(message: ChatMessage) {
-        val index = messages.indexOfFirst { it.datetime <= message.datetime }
-        if (index == -1) {
-            messages.add(message)
-        } else {
-            messages.add(index, message)
-        }
+
+    // Helper function to ensure message ordering - reconsider if needed with new refresh logic
+    // private fun addMessageSorted(message: ChatMessage) {
+    //     val index = messages.indexOfFirst { it.datetime <= message.datetime }
+    //     if (index == -1) {
+    //         messages.add(message)
+    //     } else {
+    //         messages.add(index, message)
+    //     }
+    // }
+
+    override fun onCleared() {
+        super.onCleared()
+        refreshJob?.cancel() // Cancel the refresh job when the ViewModel is destroyed
+        Log.d("ChatViewModel", "ChatViewModel cleared, refresh job cancelled.")
     }
 }
