@@ -31,6 +31,8 @@ object RetrofitInstance {
         .addInterceptor(authInterceptor)
         .build()
 
+//    https://pouncing-rune-lord.glitch.me
+//    http://10.0.2.2:3000/
     private val retrofit by lazy {
         Retrofit.Builder()
             .baseUrl("https://pouncing-rune-lord.glitch.me")

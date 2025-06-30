@@ -40,7 +40,7 @@ data class ChatPagination(
 // Request DTOs
 data class StartChatRequest(
     val receiver_id: String,
-    val message: String
+    val message: String?
 )
 
 data class UpdateMessageStatusRequest(
@@ -62,13 +62,6 @@ data class StartChatData(
     val datetime: String,
     val status: String,
     val receiver: OtherUser?
-)
-
-
-data class GetUserConversationsResponse(
-    val status: String,
-    val message: String,
-    val data: GetUserConversationsData
 )
 
 data class GetUserConversationsData(

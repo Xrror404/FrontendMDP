@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.projectmdp.data.repository.ProductRepository
 import com.example.projectmdp.data.source.dataclass.Product
+import com.example.projectmdp.data.source.local.SessionManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,7 +16,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 open class UserDashboardViewModel @Inject constructor(
-    private val productRepository: ProductRepository // Ensure this is correctly injected
+    private val productRepository: ProductRepository,
+    private val sessionManager: SessionManager// Ensure this is correctly injected
 ) : ViewModel() {
 
     // Using mutableStateOf for properties directly observed by Compose UI
@@ -150,5 +152,15 @@ open class UserDashboardViewModel @Inject constructor(
     fun chatWithSeller(sellerId: String) {
         Log.d("UserDashboardViewModel", "Chat with seller: $sellerId")
         // Implement your chat logic
+    }
+
+    fun logout() {
+        Log.d("UserDashboardViewModel", "Logging out user")
+        auth.signOut()
+        sessionManager.clearToken()
+
+        // Clear any cached data if needed
+        products = emptyList()
+        searchQuery = ""
     }
 }

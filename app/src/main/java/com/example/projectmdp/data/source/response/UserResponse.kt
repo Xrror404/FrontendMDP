@@ -65,6 +65,10 @@ data class PublicUserProfile(
     val address: String? = null,
     val role: String? = null
 )
+
+data class PublicProfileData(
+    val publicProfile: PublicUserProfile
+)
 //====================================================
 data class UpdateProfileData(
     val user: LoginDto  // Reuse UserProfile dari getUserProfile

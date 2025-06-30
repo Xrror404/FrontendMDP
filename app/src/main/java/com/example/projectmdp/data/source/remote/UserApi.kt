@@ -2,6 +2,8 @@ package com.example.projectmdp.data.source.remote
 
 import com.example.projectmdp.data.source.response.GetUserByIdData
 import com.example.projectmdp.data.source.response.ProfilePictureData
+import com.example.projectmdp.data.source.response.PublicProfileData
+import com.example.projectmdp.data.source.response.PublicUserProfile
 import com.example.projectmdp.data.source.response.SearchUsersData
 import com.example.projectmdp.data.source.response.UpdateProfileData
 import com.example.projectmdp.data.source.response.UpdateProfileRequest
@@ -42,4 +44,9 @@ interface UserApi {
     suspend fun updateProfilePicture(
         @Part image: MultipartBody.Part
     ): UserApiResponse<ProfilePictureData>
+
+    @GET("/user/firebase/{firebase_uid}")
+    suspend fun getUserByFirebaseUid(
+        @Path("firebase_uid") firebaseUid: String
+    ): UserApiResponse<PublicProfileData>
 }
