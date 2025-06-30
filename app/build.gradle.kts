@@ -123,6 +123,6 @@ dependencies {
 
     // Untuk handle deep links dari Midtrans callback
     implementation("androidx.browser:browser:1.7.0")
-    implementation("androidx.compose.material:material-icons-core:1.6.0") // Or the latest version
-    implementation("androidx.compose.material:material-icons-extended:1.6.0") // Or the latest version
+
+    implementation("androidx.compose.material:material-icons-extended:1.6.0")
 }

@@ -1,14 +1,14 @@
 package com.example.projectmdp.ui.module.Products
 
-import android.widget.Toast
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.RoundedCornerShape // Required for button shapes
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.FavoriteBorder // Keep if used elsewhere
+import androidx.compose.material.icons.filled.Share // Keep if used elsewhere
+import androidx.compose.material.icons.filled.ShoppingCart // <--- ADD THIS IMPORT for Buy Now icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -17,21 +17,19 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalContext // <--- ADD THIS IMPORT for Toast/ImageRequest
+import androidx.compose.ui.res.painterResource // <--- ADD THIS IMPORT for any custom drawables (like chat icon if not Material)
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.sp // <--- ADD THIS IMPORT for font size if used in buttons
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import com.example.projectmdp.R
+import coil.request.ImageRequest // <--- ADD THIS IMPORT for AsyncImage model builder
+import com.example.projectmdp.R // <--- ADD THIS IMPORT if you use R.drawable for placeholders/custom icons
 import com.example.projectmdp.data.source.dataclass.Product
 import com.example.projectmdp.data.source.dataclass.User
-import com.example.projectmdp.navigation.Routes
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -45,7 +43,6 @@ import androidx.compose.material.icons.filled.Email
 import com.example.projectmdp.navigation.Routes
 import androidx.navigation.compose.currentBackStackEntryAsState
 import java.util.TimeZone
-import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,9 +55,13 @@ fun DetailsScreen(
     val seller: User? by productViewModel.selectedProductSeller.observeAsState()
     val isLoading: Boolean by productViewModel.isLoading.observeAsState(initial = false)
     val errorMessage: String? by productViewModel.errorMessage.observeAsState()
-    val context = LocalContext.current
+
+    val context = LocalContext.current // Get context for Toast messages
     val currentLoggedInUserId: String? by productViewModel.currentLoggedInUserId.observeAsState()
+
     val productDeletionSuccess by productViewModel.productDeletionSuccess.observeAsState()
+
+
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale("id", "ID")) }
 
     LaunchedEffect(productId) {
@@ -72,18 +73,14 @@ fun DetailsScreen(
             Toast.makeText(context, "Product deleted successfully!", Toast.LENGTH_SHORT).show()
             navController.previousBackStackEntry?.savedStateHandle?.set("shouldRefreshDashboard", true)
             navController.popBackStack()
-            // Consider adding a reset function in ViewModel to prevent this from re-triggering
-            // productViewModel.resetDeletionStatus()
         }
     }
-
     LaunchedEffect(errorMessage) {
         errorMessage?.let { message ->
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
             productViewModel.clearErrorMessage()
         }
     }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -99,234 +96,201 @@ fun DetailsScreen(
                 )
             )
         },
+        // --- START: MODIFIED bottomBar ---
         bottomBar = {
+            // Check if product is loaded before showing buttons
             val currentProduct = product
-            // Show bottom bar only when data is loaded and not in a loading state
-            if (currentProduct != null && !isLoading) {
+            if (currentProduct != null) {
                 val isMyProduct = currentProduct.user_id == currentLoggedInUserId
 
-                Surface(
-                    shadowElevation = 8.dp, // Add a shadow for better separation
-                    tonalElevation = 4.dp
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .navigationBarsPadding(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding() // Handles gesture navigation padding
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (isMyProduct) {
-                            // --- Buttons for Owner ---
-                            Button(
-                                onClick = { navController.navigate("UPDATE_PRODUCT/$productId") },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.Edit, contentDescription = "Update")
-                                Spacer(Modifier.width(8.dp))
-                                Text("Update", fontSize = 16.sp)
-                            }
+                    if (isMyProduct) {
+                        Button(
+                            onClick = {
+                                navController.navigate("UPDATE_PRODUCT/$productId")
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Update Product",
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Update", fontSize = 16.sp)
+                        }
 
-                            OutlinedButton(
-                                onClick = { productViewModel.deleteProduct(currentProduct.product_id) },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete")
-                                Spacer(Modifier.width(8.dp))
-                                Text("Delete", fontSize = 16.sp)
-                            }
-                        } else {
-                            // --- Buttons for Buyer ---
-                            Button(
-                                onClick = {
+                        OutlinedButton(
+                            onClick = {
+                                productViewModel.deleteProduct(currentProduct.product_id)
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete Product",
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Delete", fontSize = 16.sp)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                product?.let {
                                     navController.navigate(
                                         Routes.midtransRoute(
-                                            productId = currentProduct.product_id,
-                                            price = currentProduct.price
+                                            productId = it.product_id,
+                                            price = it.price
                                         )
                                     )
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.ShoppingCart, contentDescription = "Buy Now")
-                                Spacer(Modifier.width(8.dp))
-                                Text("Buy Now", fontSize = 16.sp)
-                            }
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ShoppingCart,
+                                contentDescription = "Buy Now",
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Buy Now", fontSize = 16.sp)
+                        }
 
-                            OutlinedButton(
-                                onClick = {
-                                    seller?.id?.let {
-                                        navController.navigate("chat/$it")
-                                    } ?: Toast.makeText(context, "Seller information not available.", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.Email, contentDescription = "Chat")
-                                Spacer(Modifier.width(8.dp))
-                                Text("Chat", fontSize = 16.sp)
-                            }
+                        OutlinedButton(
+                            onClick = {
+                                val sellerId = seller?.id
+                                if (sellerId != null) {
+                                    navController.navigate("chat/$sellerId")
+                                } else {
+                                    Toast.makeText(context, "Seller information not available for chat.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f), // Take equal weight
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary,
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Email,
+                                contentDescription = "Chat",
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Chat", fontSize = 16.sp)
                         }
                     }
+
+
                 }
             }
         }
-    ) { paddingValuesFromScaffold ->
-        // This Box is the single scrollable container
+    ) { paddingValuesFromScaffold -> // Rename paddingValues to avoid clash with local paddingValues
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValuesFromScaffold) // Apply padding from Scaffold
-                .verticalScroll(rememberScrollState()), // Main scroll handler
+                .padding(paddingValuesFromScaffold) // Use the Scaffold's padding
+                .padding(horizontal = 16.dp) // Keep your original horizontal padding inside
+                .verticalScroll(rememberScrollState()), // Keep original scroll modifier on content
             contentAlignment = Alignment.Center
         ) {
             when {
-                isLoading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                errorMessage != null && product == null -> Text("Error: $errorMessage", color = MaterialTheme.colorScheme.error)
-                product == null -> if (!isLoading) Text("Product with ID $productId not found.")
+                isLoading -> {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+                errorMessage != null -> {
+                    Text("Error: $errorMessage", color = MaterialTheme.colorScheme.error)
+                }
+                product == null -> {
+                    Text("Product with ID $productId not found.")
+                }
                 else -> {
-                    // Create a stable local copy to avoid smart-cast issues
-                    val currentProduct = product
-
-                    // This Column is NOT scrollable itself, it just arranges content vertically
-                    Column(
-                        modifier = Modifier.fillMaxWidth() // No scroll or size modifiers here
-                    ) {
-                        // --- PRODUCT IMAGE ---
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(product!!.image)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = product!!.name,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(300.dp),
-                            contentScale = ContentScale.Crop,
-                            error = painterResource(id = R.drawable.alert_error),
-                            placeholder = painterResource(id = R.drawable.landscape_placeholder)
-                        )
-
-                        // --- MAIN CONTENT WITH PADDING ---
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 24.dp)
-                        ) {
-                            // --- PRODUCT NAME & CATEGORY ---
-                            Text(
-                                text = product!!.name,
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            if (product!!.hasCategory()) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = product!!.category,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(24.dp))
-
-                            // --- PRODUCT DETAILS SECTION ---
-                            Text(
-                                text = "Detail Produk",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            product!!.description?.let {
-                                DetailItem(icon = Icons.Default.Description, label = "Deskripsi", content = it)
-                            }
-
-                            DetailItem(icon = Icons.Default.MonetizationOn, label = "Harga", content = currencyFormat.format(product!!.price))
-
-                            val formattedDate = remember(product!!.created_at) {
-                                try {
-                                    val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.getDefault()).apply {
-                                        timeZone = TimeZone.getTimeZone("UTC")
-                                    }
-                                    parser.parse(product!!.created_at)?.let { date ->
-                                        SimpleDateFormat("dd MMMM yyyy, HH:mm", Locale.getDefault()).format(date)
-                                    } ?: product!!.created_at
-                                } catch (e: Exception) {
-                                    product!!.created_at // Fallback
-                                }
-                            }
-                            DetailItem(icon = Icons.Default.CalendarToday, label = "Tanggal Upload", content = formattedDate)
-
-                            // --- VISUAL SEPARATOR ---
-                            Divider(modifier = Modifier.padding(vertical = 24.dp))
-
-                            // --- SELLER INFORMATION SECTION ---
-                            Text(
-                                text = "Informasi Penjual",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            DetailItem(icon = Icons.Default.Person, label = "Penjual", content = seller?.username ?: "Informasi tidak tersedia")
-                            DetailItem(icon = Icons.Default.LocationOn, label = "Lokasi", content = seller?.address ?: "Lokasi tidak diketahui")
-
-                            Spacer(modifier = Modifier.height(16.dp)) // Final padding at the bottom
-                        }
-                    }
+                    // This content remains identical to your original ProductDetailsContent logic
+                    ProductDetailsContent(product = product!!, seller = seller, currencyFormat = currencyFormat)
                 }
             }
         }
     }
 }
 
-/**
- * A private helper composable to display a detail item consistently.
- * It includes an icon, a label, and the content.
- */
+// ProductDetailsContent Composable (remains completely original from your provided code)
 @Composable
-private fun DetailItem(
-    icon: ImageVector,
-    label: String,
-    content: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.primary
+private fun ProductDetailsContent(product: Product, seller: User?, currencyFormat: NumberFormat) {
+    val context = LocalContext.current // Added context for ImageRequest
+
+    Column(modifier = Modifier.fillMaxSize()) { // Keep fillMaxSize as it's the inner scrollable content
+        AsyncImage(
+            model = ImageRequest.Builder(context) // Use context for ImageRequest
+                .data(product.image)
+                .crossfade(true)
+                .build(),
+            contentDescription = product.name,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp),
+            contentScale = ContentScale.Crop,
+            error = painterResource(id = R.drawable.alert_error), // Assuming these drawables exist
+            placeholder = painterResource(id = R.drawable.landscape_placeholder) // Assuming these drawables exist
         )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column {
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = product.name,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        if (product.hasCategory()) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                Text(
+                    text = product.category,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Description",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        product.description?.let {
             Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = content,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                text = it,
+                style = MaterialTheme.typography.bodyLarge
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
@@ -364,12 +328,4 @@ private fun DetailItem(
         )
         Spacer(modifier = Modifier.height(16.dp)) // Original spacer
     }
-    Spacer(modifier = Modifier.height(18.dp)) // Spacing after each detail item
-}
-
-/**
- * An extension function to check if the product has a non-blank category.
- */
-private fun Product.hasCategory(): Boolean {
-    return !this.category.isNullOrBlank()
 }

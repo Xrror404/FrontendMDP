@@ -11,11 +11,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Analytics
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.ui.res.painterResource
+import com.example.projectmdp.R
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,46 +23,37 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import androidx.navigation.compose.currentBackStackEntryAsState
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.example.projectmdp.R
-import com.example.projectmdp.data.source.dataclass.Product
 import com.example.projectmdp.navigation.Routes
 import java.text.NumberFormat
 import java.util.Locale
+import androidx.navigation.compose.currentBackStackEntryAsState
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserDashboardScreen(
     viewModel: UserDashboardViewModel = viewModel(),
     navController: NavController,
     modifier: Modifier = Modifier
 ) {
-    // --- State dari ViewModel ---
     val searchQuery = viewModel.searchQuery
     val products = viewModel.products
     val userInitials = viewModel.userInitials
     val isLoading = viewModel.isLoading
 
-    // --- State lokal untuk UI tetap menggunakan 'by' ---
-    var showProfileMenu by remember { mutableStateOf(false) }
-    var showFilterBottomSheet by remember { mutableStateOf(false) }
-    val modalBottomSheetState = rememberModalBottomSheetState()
-
-    // --- Efek untuk Refresh Data ---
     val navBackStackEntry by navController.currentBackStackEntryAsState()
+    var showProfileMenu by remember { mutableStateOf(false) }
+
     LaunchedEffect(navBackStackEntry) {
         val shouldRefresh = navBackStackEntry?.savedStateHandle?.get<Boolean>("shouldRefreshDashboard")
         if (shouldRefresh == true) {
-            Log.d("UserDashboard", "Menerima sinyal refresh. Memuat ulang produk...")
+            Log.d("UserDashboard", "Received refresh signal. Reloading products...")
             viewModel.loadProducts(forceRefresh = true)
             navBackStackEntry?.savedStateHandle?.remove<Boolean>("shouldRefreshDashboard")
         }
@@ -71,22 +61,6 @@ fun UserDashboardScreen(
     LaunchedEffect(Unit) { // 'Unit' as a key ensures this block runs once when the Composable first enters the Composition
         Log.d("UserDashboard", "UserDashboardScreen initialized. Loading products initially.")
         viewModel.loadProducts(forceRefresh = true) // Load products immediately
-    }
-
-    // --- Tampilkan Filter Bottom Sheet jika diminta ---
-    if (showFilterBottomSheet) {
-        FilterBottomSheet(
-            sheetState = modalBottomSheetState,
-            onDismiss = { showFilterBottomSheet = false },
-            onApplyFilter = { category ->
-                viewModel.filterProductsByCategory(category)
-                showFilterBottomSheet = false
-            },
-            onClearFilter = {
-                viewModel.loadProducts(forceRefresh = true)
-                showFilterBottomSheet = false
-            }
-        )
     }
 
     Box(
@@ -97,14 +71,12 @@ fun UserDashboardScreen(
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // --- Top Bar dengan Tombol Chat dan Profil ---
             TopBar(
                 userInitials = userInitials,
                 onProfileClick = { showProfileMenu = true },
-                onChatClick = { navController.navigate(Routes.CHAT_LIST) }
+                onChatClick = { navController.navigate(Routes.CHAT_LIST)}
             )
 
-            // --- Search Bar dengan Tombol Filter ---
             SearchBar(
                 searchQuery = searchQuery,
                 onSearchChange = { viewModel.onSearchQueryChange(it) },
@@ -114,17 +86,23 @@ fun UserDashboardScreen(
                     } else {
                         viewModel.searchProducts()
                     }
-                },
-                onFilterClick = { showFilterBottomSheet = true }
+                }
             )
 
-            // --- Konten Utama (Loading, Empty, atau Daftar Produk) ---
             if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             } else if (products.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
                         text = "No products found",
                         style = MaterialTheme.typography.bodyLarge,
@@ -137,13 +115,14 @@ fun UserDashboardScreen(
                         .fillMaxSize()
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(top = 16.dp, bottom = 80.dp)
+                    contentPadding = PaddingValues(vertical = 16.dp)
                 ) {
-                    items(products, key = { it.product_id }) { product ->
+                    items(products) { product ->
                         ProductCard(
                             product = product,
                             onProductClick = {
                                 val routeToNavigate = Routes.productDetailRoute(product.product_id)
+                                Log.d("NavigationDebug", "Attempting to navigate to: $routeToNavigate")
                                 navController.navigate(routeToNavigate)
                             },
                             onBuyClick = { viewModel.buyProduct(product) },
@@ -154,7 +133,6 @@ fun UserDashboardScreen(
             }
         }
 
-        // --- Tampilkan Menu Profil jika diminta ---
         if (showProfileMenu) {
             ProfileMenuPopup(
                 onDismiss = { showProfileMenu = false },
@@ -180,7 +158,6 @@ fun UserDashboardScreen(
             )
         }
 
-        // --- Floating Action Button untuk Tambah Produk ---
         FloatingActionButton(
             onClick = { navController.navigate(Routes.ADD_PRODUCT) },
             modifier = Modifier
@@ -196,10 +173,6 @@ fun UserDashboardScreen(
         }
     }
 }
-
-// =============================================================================================
-// =================================== COMPONENT COMPOSABLES ===================================
-// =============================================================================================
 
 @Composable
 private fun TopBar(
@@ -222,14 +195,18 @@ private fun TopBar(
         )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // Chat Icon Button
             IconButton(onClick = onChatClick) {
                 Icon(
-                    painter = painterResource(id = R.drawable.chat_24px), // Pastikan resource ini ada
+                    painter = painterResource(id = R.drawable.chat_24px), // make sure this exists
                     contentDescription = "Messages",
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
+
             Spacer(modifier = Modifier.width(8.dp))
+
+            // User Profile Circle
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -253,48 +230,33 @@ private fun TopBar(
 private fun SearchBar(
     searchQuery: String,
     onSearchChange: (String) -> Unit,
-    onSearchSubmit: () -> Unit,
-    onFilterClick: () -> Unit
+    onSearchSubmit: () -> Unit
 ) {
-    Row(
+    OutlinedTextField(
+        value = searchQuery,
+        onValueChange = onSearchChange,
+        placeholder = { Text("Search for products...") },
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchChange,
-            placeholder = { Text("Search for products...") },
-            modifier = Modifier.weight(1f),
-            leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = "Search") },
-            shape = RoundedCornerShape(12.dp),
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline
-            )
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        IconButton(
-            onClick = onFilterClick,
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer)
-        ) {
+        leadingIcon = {
             Icon(
-                imageVector = Icons.Default.Tune,
-                contentDescription = "Filter Products",
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                imageVector = Icons.Default.Search,
+                contentDescription = "Search"
             )
-        }
-    }
+        },
+        shape = RoundedCornerShape(12.dp),
+        singleLine = true,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+        )
+    )
 }
 
 @Composable
 private fun ProductCard(
-    product: Product,
+    product: com.example.projectmdp.data.source.dataclass.Product,
     onProductClick: () -> Unit,
     onBuyClick: () -> Unit,
     onChatClick: () -> Unit
@@ -308,9 +270,13 @@ private fun ProductCard(
             .clickable { onProductClick() },
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -327,6 +293,7 @@ private fun ProductCard(
                     error = painterResource(id = R.drawable.alert_error),
                     placeholder = painterResource(id = R.drawable.landscape_placeholder)
                 )
+
                 Surface(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
@@ -342,7 +309,10 @@ private fun ProductCard(
                     )
                 }
             }
-            Column(modifier = Modifier.padding(16.dp)) {
+
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
                 Text(
                     text = product.name,
                     style = MaterialTheme.typography.titleMedium,
@@ -350,7 +320,9 @@ private fun ProductCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+
                 Spacer(modifier = Modifier.height(4.dp))
+
                 product.description?.let {
                     Text(
                         text = it,
@@ -361,6 +333,7 @@ private fun ProductCard(
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }
+
                 if (product.hasCategory()) {
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,
@@ -375,104 +348,46 @@ private fun ProductCard(
                         )
                     }
                 }
-            }
-        }
-    }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun FilterBottomSheet(
-    sheetState: SheetState,
-    onDismiss: () -> Unit,
-    onApplyFilter: (String) -> Unit,
-    onClearFilter: () -> Unit
-) {
-    val categories = remember {
-        listOf("All Categories","Games", "Sword", "Vehicle", "Accessories", "Gadget & Technology", "Furniture", "Drone", "Other")
-    }
-    var selectedCategory by remember { mutableStateOf(categories.first()) }
-    var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text("Filter Options", style = MaterialTheme.typography.titleLarge)
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "Filter by Category",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
-            )
-            Box(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = selectedCategory,
-                    onValueChange = {},
-                    label = { Text("Category") },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    readOnly = true,
-                    trailingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = "Open categories",
-                            Modifier.clickable { isCategoryDropdownExpanded = true }
-                        )
-                    }
-                )
-                DropdownMenu(
-                    expanded = isCategoryDropdownExpanded,
-                    onDismissRequest = { isCategoryDropdownExpanded = false },
-                    modifier = Modifier.fillMaxWidth(0.9f)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    categories.forEach { categoryOption ->
-                        DropdownMenuItem(
-                            text = { Text(categoryOption) },
-                            onClick = {
-                                selectedCategory = categoryOption
-                                isCategoryDropdownExpanded = false
-                            }
-                        )
-                    }
-                }
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(Color.Transparent)
-                        .clickable { isCategoryDropdownExpanded = true }
-                )
-            }
-            Spacer(modifier = Modifier.height(28.dp))
+//                    Button(
+//                        onClick = onBuyClick,
+//                        modifier = Modifier.weight(1f),
+//                        shape = RoundedCornerShape(8.dp),
+//                        colors = ButtonDefaults.buttonColors(
+//                            containerColor = MaterialTheme.colorScheme.primary
+//                        )
+//                    ) {
+//                        Icon(
+//                            imageVector = Icons.Default.ShoppingCart,
+//                            contentDescription = "Buy",
+//                            modifier = Modifier.size(16.dp)
+//                        )
+//                        Spacer(modifier = Modifier.width(4.dp))
+//                        Text("Buy", fontSize = 12.sp)
+//                    }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onClearFilter,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("Clear")
-                }
-                Button(
-                    onClick = { onApplyFilter(selectedCategory) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("Apply")
+//                    OutlinedButton(
+//                        onClick = onChatClick,
+//                        modifier = Modifier.weight(1f),
+//                        shape = RoundedCornerShape(8.dp),
+//                        colors = ButtonDefaults.outlinedButtonColors(
+//                            contentColor = MaterialTheme.colorScheme.primary
+//                        )
+//                    ) {
+//                        Icon(
+//                            painter = painterResource(id = R.drawable.chat_24px),
+//                            contentDescription = "Chat",
+//                            modifier = Modifier.size(16.dp)
+//                        )
+//                        Spacer(modifier = Modifier.width(4.dp))
+//                        Text("Chat", fontSize = 12.sp)
+//                    }
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -599,4 +514,3 @@ fun ProfileMenuPopup(
         }
     }
 }
-

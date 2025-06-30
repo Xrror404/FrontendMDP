@@ -5,10 +5,10 @@ import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.projectmdp.data.repository.ProductRepository
-import com.example.projectmdp.data.repository.ProductWithPagination // Pastikan import ini ada
 import com.example.projectmdp.data.source.dataclass.Product
 import com.example.projectmdp.data.source.local.SessionManager
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -17,136 +17,100 @@ import javax.inject.Inject
 @HiltViewModel
 open class UserDashboardViewModel @Inject constructor(
     private val productRepository: ProductRepository,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager// Ensure this is correctly injected
 ) : ViewModel() {
 
-    // --- State untuk UI yang diamati oleh Compose ---
+    // Using mutableStateOf for properties directly observed by Compose UI
+    // The `by` delegate automatically creates a State object.
     var searchQuery by mutableStateOf("")
-        private set
+        private set // Set to private set so only ViewModel can change directly
+
     var products by mutableStateOf<List<Product>>(emptyList())
-        private set
+        private set // Set to private set
+
     var isLoading by mutableStateOf(false)
         private set
+
     var userInitials by mutableStateOf("U")
-        private set
-    var selectedCategory by mutableStateOf<String?>("All Categories")
         private set
 
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    // FirebaseFirestore is directly used here for initials, which is fine
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 
     init {
         loadUserInitials()
-        loadProducts(forceRefresh = true)
+        loadProducts(forceRefresh = true) // Load products initially when ViewModel is created
     }
 
-    /**
-     * Memperbarui query pencarian. Jika query kosong, muat ulang produk sesuai filter terakhir.
-     */
-    fun onSearchQueryChange(query: String) {
+    fun onSearchQueryChange(query: String) { // Made fun from open fun
         searchQuery = query
         Log.d("UserDashboardViewModel", "Query changed: $query")
-        if (query.isBlank()) {
-            // Jika search bar dikosongkan, muat ulang berdasarkan kategori yang terakhir dipilih
-            val lastCategory = selectedCategory ?: "All Categories"
-            filterProductsByCategory(lastCategory)
+        if (query.isEmpty()) {
+            loadProducts(forceRefresh = true) // Load all products when search is cleared
         } else {
             searchProducts()
         }
     }
 
-    /**
-     * Menjalankan pencarian produk berdasarkan searchQuery.
-     */
-    fun searchProducts() {
+    fun searchProducts() { // Made fun from open fun
         if (searchQuery.isBlank()) {
-            loadProducts(forceRefresh = true)
+            loadProducts(forceRefresh = true) // If search query is blank, just load all
             return
         }
         Log.d("UserDashboardViewModel", "Searching for products with query: $searchQuery")
+        // No need for 'if (productRepository != null)' because it's @Inject and non-nullable
+        searchProductsWithRepository()
+    }
+
+    private fun searchProductsWithRepository() {
         viewModelScope.launch {
             isLoading = true
             try {
+                // Ensure productRepository?.searchProducts returns Flow<Result<List<Product>>>
+                // and you collect it.
                 productRepository.searchProducts(searchQuery).collectLatest { result ->
                     result.fold(
                         onSuccess = { searchResults ->
-                            products = searchResults
+                            products = searchResults // Update mutableStateOf directly
                             Log.d("UserDashboardViewModel", "Search completed: ${searchResults.size} products found")
                         },
                         onFailure = { error ->
                             Log.e("UserDashboardViewModel", "Search failed: ${error.message}", error)
-                            products = emptyList()
+                            // You might want to show this error in the UI
+                            products = emptyList() // Clear products on error
                         }
                     )
                     isLoading = false
                 }
             } catch (e: Exception) {
                 Log.e("UserDashboardViewModel", "Search failed with exception: ${e.message}", e)
-                products = emptyList()
+                products = emptyList() // Clear products on exception
                 isLoading = false
             }
         }
     }
 
-    /**
-     * Memuat semua produk dari repository dan mereset filter.
-     */
-    fun loadProducts(forceRefresh: Boolean = false) {
-        Log.d("UserDashboardViewModel", "Loading all products (forceRefresh: $forceRefresh)")
-        selectedCategory = "All Categories"
-        loadProductsWithRepository(forceRefresh)
-    }
-
-    /**
-     * FUNGSI BARU: Memfilter produk berdasarkan kategori yang dipilih.
-     */
-    fun filterProductsByCategory(category: String) {
-        selectedCategory = category
-        searchQuery = "" // Hapus query pencarian
-
-        if (category == "All Categories") {
-            loadProducts(forceRefresh = true)
-            return
-        }
-
-        Log.d("UserDashboardViewModel", "Filtering products by category: $category")
-        viewModelScope.launch {
-            isLoading = true
-            try {
-                // Panggil repository untuk mendapatkan produk berdasarkan kategori
-                productRepository.getProductsByCategory(category).collectLatest { result ->
-                    result.fold(
-                        onSuccess = { filteredProducts ->
-                            products = filteredProducts
-                            Log.d("UserDashboardViewModel", "Filter completed: ${filteredProducts.size} products found for '$category'")
-                        },
-                        onFailure = { error ->
-                            Log.e("UserDashboardViewModel", "Failed to filter products from repo: ${error.message}", error)
-                            products = emptyList()
-                        }
-                    )
-                    isLoading = false
-                }
-            } catch (e: Exception) {
-                Log.e("UserDashboardViewModel", "Filtering failed with exception: ${e.message}", e)
-                products = emptyList()
-                isLoading = false
-            }
-        }
+    // Main function to load products, now accepts forceRefresh
+    fun loadProducts(forceRefresh: Boolean = false) { // Made fun from open fun, added forceRefresh
+        Log.d("UserDashboardViewModel", "Loading products (forceRefresh: $forceRefresh)")
+        loadProductsWithRepository(forceRefresh) // Pass forceRefresh to the repository call
     }
 
     private fun loadProductsWithRepository(forceRefresh: Boolean) {
         viewModelScope.launch {
             isLoading = true
             try {
+                // Ensure productRepository?.getAllProducts returns Flow<Result<ProductWithPagination>>
                 productRepository.getAllProducts(forceRefresh = forceRefresh).collectLatest { result ->
                     result.fold(
                         onSuccess = { productWithPagination ->
-                            products = productWithPagination.products
-                            Log.d("UserDashboardViewModel", "Products loaded: ${productWithPagination.products.size}")
+                            products = productWithPagination.products // Update mutableStateOf directly
+                            Log.d("UserDashboardViewModel", "Products loaded: ${products.size}")
                         },
                         onFailure = { error ->
                             Log.e("UserDashboardViewModel", "Failed to load products: ${error.message}", error)
-                            products = emptyList()
+                            products = emptyList() // Clear products on error
                         }
                     )
                     isLoading = false
@@ -182,12 +146,12 @@ open class UserDashboardViewModel @Inject constructor(
 
     fun buyProduct(product: Product) {
         Log.d("UserDashboardViewModel", "Buy product: ${product.name}")
-        // TODO: Implement buy logic
+        // Implement your buy logic
     }
 
     fun chatWithSeller(sellerId: String) {
         Log.d("UserDashboardViewModel", "Chat with seller: $sellerId")
-        // TODO: Implement chat logic
+        // Implement your chat logic
     }
 
     fun logout() {
@@ -195,10 +159,8 @@ open class UserDashboardViewModel @Inject constructor(
         auth.signOut()
         sessionManager.clearToken()
 
-        // Hapus data yang di-cache di ViewModel untuk memastikan UI bersih
+        // Clear any cached data if needed
         products = emptyList()
         searchQuery = ""
-        userInitials = "U"
-        selectedCategory = "All Categories"
     }
 }
