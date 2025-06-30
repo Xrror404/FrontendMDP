@@ -79,12 +79,24 @@ class ProductViewModel @Inject constructor(
 
         viewModelScope.launch {
             val userId = _selectedProduct.value?.user_id
+            Log.d("ProductViewModel", "Trying to fetch seller with user_id: $userId")
+
             if (userId != null) {
                 userRepository.getUserById(userId).collect { result ->
                     _isLoading.value = false
 
                     result.onSuccess { user ->
-                        _selectedProductSeller.value = user
+                        Log.d("ProductViewModel", "Fetched seller: ${user.username} - Id: ${user.id}")
+                        userRepository.getUserById(sessionManager.getUserId().toString()).collect { userResult ->
+                            userResult.onSuccess { currentUser ->
+                                Log.d(
+                                    "ProductViewModel",
+                                    "Current User: ${currentUser.username} - Id: ${currentUser.id} - Address: ${currentUser.address}"
+                                )
+                                _selectedProductSeller.value = user
+                            }
+                        }
+//                        _selectedProductSeller.value = user
                         _errorMessage.value = null
                     }.onFailure { throwable ->
                         _errorMessage.value = throwable.message ?: "Failed to load seller information."

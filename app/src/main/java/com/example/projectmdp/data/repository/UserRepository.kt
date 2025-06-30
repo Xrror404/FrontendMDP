@@ -1,6 +1,9 @@
 package com.example.projectmdp.data.repository
 
+import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
+import android.util.Log
 import com.example.projectmdp.data.model.auth.LoginDto
 import com.example.projectmdp.data.source.dataclass.User
 import com.example.projectmdp.data.source.local.dao.UserDao
@@ -14,6 +17,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -68,7 +72,7 @@ fun PublicUserProfile.toUser(): User {
 
 @Singleton
 class UserRepository @Inject constructor(
-    private val userDao: UserDao,
+    private val userDao: UserDao
 //    private val userApi: UserApi
 ) {
 
@@ -144,34 +148,67 @@ class UserRepository @Inject constructor(
         }
     }
 
-    suspend fun updateProfilePicture(imageUri: Uri): Flow<Result<String>> = flow {
+    suspend fun updateProfilePicture(context: Context, imageUri: Uri): Flow<Result<String>> = flow {
+        var tempFile: File? = null
+        
         try {
-            val file = File(imageUri.path ?: "")
-            if (!file.exists()) {
-                emit(Result.failure(Exception("Image file not found")))
+            Log.d("UserRepository", "Starting profile picture update with URI: $imageUri")
+            
+            // Create temp file from URI (similar to ProductRepository)
+            tempFile = createTempFileFromUri(context, imageUri)
+            
+            if (tempFile == null || !tempFile.exists()) {
+                Log.e("UserRepository", "Failed to create temp file from URI")
+                emit(Result.failure(Exception("Failed to prepare image file for upload. Please try again.")))
                 return@flow
             }
 
-            val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
-            val imagePart = MultipartBody.Part.createFormData("image", file.name, requestFile)
+            Log.d("UserRepository", "Temp file created successfully: ${tempFile.name}, size: ${tempFile.length()} bytes")
 
+            val requestFile = tempFile.asRequestBody("image/*".toMediaTypeOrNull())
+            val fileName = getFileName(context, imageUri) ?: "profile_picture.jpg"
+            val imagePart = MultipartBody.Part.createFormData("image", fileName, requestFile)
+
+            Log.d("UserRepository", "Uploading profile picture to server...")
             val response = RetrofitInstance.Userapi.updateProfilePicture(imagePart)
+            
+            Log.d("UserRepository", "Server response status: ${response.status}")
+            
             if (response.status == 200) {
                 response.data?.let { profileData ->
                     val profilePictureUrl = profileData.profile_picture
+                    Log.d("UserRepository", "Profile picture URL received: $profilePictureUrl")
                     
                     // Update cache
                     userDao.getCurrentUser()?.let { currentUser ->
                         userDao.updateProfilePicture(currentUser.id, profilePictureUrl)
+                        Log.d("UserRepository", "Profile picture URL cached successfully")
                     }
                     
                     emit(Result.success(profilePictureUrl))
-                } ?: emit(Result.failure(Exception("Failed to update profile picture")))
+                } ?: run {
+                    Log.e("UserRepository", "No profile data received from server")
+                    emit(Result.failure(Exception("Failed to update profile picture")))
+                }
             } else {
+                Log.e("UserRepository", "Server error: ${response.message}")
                 emit(Result.failure(Exception(response.message)))
             }
         } catch (e: Exception) {
+            Log.e("UserRepository", "Exception during profile picture update", e)
             emit(Result.failure(e))
+        } finally {
+            // Clean up temp file
+            tempFile?.let { file ->
+                try {
+                    if (file.exists()) {
+                        file.delete()
+                        Log.d("UserRepository", "Temp file deleted successfully")
+                    }
+                } catch (e: Exception) {
+                    Log.w("UserRepository", "Failed to delete temp file: ${e.message}")
+                }
+            }
         }
     }
 
@@ -309,5 +346,40 @@ class UserRepository @Inject constructor(
     suspend fun saveCurrentUser(user: User) {
         val userEntity = user.toUserEntity().copy(role = "current_user")
         userDao.insertUser(userEntity)
+    }
+
+    // Helper functions for file handling (similar to ProductRepository)
+    private fun createTempFileFromUri(context: Context, uri: Uri): File? {
+        return try {
+            val inputStream = context.contentResolver.openInputStream(uri)
+            val fileName = getFileName(context, uri)
+            val tempFile = File(context.cacheDir, "upload_profile_${System.currentTimeMillis()}_${fileName ?: "image.jpg"}")
+            inputStream?.use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            tempFile
+        } catch (e: Exception) {
+            Log.e("UserRepository", "Error creating temp file from URI: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun getFileName(context: Context, uri: Uri): String? {
+        var result: String? = null
+        if (uri.scheme == "content") {
+            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1 && cursor.moveToFirst()) {
+                    result = cursor.getString(nameIndex)
+                }
+            }
+        }
+        // Fallback to last path segment if content resolver fails or it's a file URI
+        if (result == null) {
+            result = uri.lastPathSegment
+        }
+        return result
     }
 }

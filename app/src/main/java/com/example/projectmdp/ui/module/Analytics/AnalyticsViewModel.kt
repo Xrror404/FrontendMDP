@@ -328,7 +328,7 @@ class AnalyticsViewModel @Inject constructor(
         val failedCount = transactions.count { isFailedStatus(it.payment_status) }
         
         return BuyerStats(
-            totalSpent = 0.0, // Not used anymore, using repository function
+            totalSpent = 0.0,
             totalCount = transactions.size,
             completedCount = completedCount,
             pendingCount = pendingCount,
@@ -342,7 +342,7 @@ class AnalyticsViewModel @Inject constructor(
         val failedCount = transactions.count { isFailedStatus(it.payment_status) }
         
         return SellerStats(
-            totalEarned = 0.0, // Not used anymore, using repository function
+            totalEarned = 0.0,
             totalCount = transactions.size,
             completedCount = completedCount,
             pendingCount = pendingCount,
