@@ -37,8 +37,11 @@ import java.util.Date
 import android.widget.Toast // <--- ADD THIS IMPORT for toast messages
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import com.example.projectmdp.navigation.Routes
+import androidx.navigation.compose.currentBackStackEntryAsState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,15 +56,37 @@ fun DetailsScreen(
     val errorMessage: String? by productViewModel.errorMessage.observeAsState()
 
     val context = LocalContext.current // Get context for Toast messages
+    val currentLoggedInUserId: String? by productViewModel.currentLoggedInUserId.observeAsState()
+
+    val productDeletionSuccess by productViewModel.productDeletionSuccess.observeAsState()
+
+
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale("id", "ID")) }
 
+    LaunchedEffect(productId) {
+        productViewModel.fetchProductById(productId)
+    }
+
+    LaunchedEffect(productDeletionSuccess) {
+        if (productDeletionSuccess == true) {
+            Toast.makeText(context, "Product deleted successfully!", Toast.LENGTH_SHORT).show()
+            navController.previousBackStackEntry?.savedStateHandle?.set("shouldRefreshDashboard", true)
+            navController.popBackStack()
+        }
+    }
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            productViewModel.clearErrorMessage()
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(product?.name ?: "Loading Product...") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -73,68 +98,117 @@ fun DetailsScreen(
         // --- START: MODIFIED bottomBar ---
         bottomBar = {
             // Check if product is loaded before showing buttons
-            if (product != null) {
+            val currentProduct = product
+            if (currentProduct != null) {
+                val isMyProduct = currentProduct.user_id == currentLoggedInUserId
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp) // Padding around the buttons
-                        .navigationBarsPadding(), // Account for system navigation bar
-                    horizontalArrangement = Arrangement.spacedBy(16.dp), // Space between buttons
+                        .padding(16.dp)
+                        .navigationBarsPadding(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
-                        onClick = {
-                            product?.let {
-                                navController.navigate(
-                                    Routes.midtransRoute(
-                                        productId = it.product_id,
-                                        price = it.price
+                    if (isMyProduct) {
+                        Button(
+                            onClick = {
+                                navController.navigate("UPDATE_PRODUCT/$productId")
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Update Product",
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Update", fontSize = 16.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                productViewModel.deleteProduct(currentProduct.product_id)
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete Product",
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Delete", fontSize = 16.sp)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                product?.let {
+                                    navController.navigate(
+                                        Routes.midtransRoute(
+                                            productId = it.product_id,
+                                            price = it.price
+                                        )
                                     )
-                                )
-                            }
-                        },
-                        modifier = Modifier.weight(1f), // Take equal weight
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        ),
-                        contentPadding = PaddingValues(vertical = 12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ShoppingCart,
-                            contentDescription = "Buy Now",
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Buy Now", fontSize = 16.sp)
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ShoppingCart,
+                                contentDescription = "Buy Now",
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Buy Now", fontSize = 16.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                val sellerId = seller?.id
+                                if (sellerId != null) {
+                                    navController.navigate("chat/$sellerId")
+                                } else {
+                                    Toast.makeText(context, "Seller information not available for chat.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f), // Take equal weight
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary,
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Email,
+                                contentDescription = "Chat",
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Chat", fontSize = 16.sp)
+                        }
                     }
 
-                    OutlinedButton(
-                        onClick = {
-                            val sellerId = seller?.id
-                            if (sellerId != null) {
-                               navController.navigate("chat/$sellerId")
-                            } else {
-                                Toast.makeText(context, "Seller information not available for chat.", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier.weight(1f), // Take equal weight
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary,
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                        contentPadding = PaddingValues(vertical = 12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Email,
-                            contentDescription = "Chat",
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Chat", fontSize = 16.sp)
-                    }
+
                 }
             }
         }

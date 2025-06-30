@@ -56,6 +56,10 @@ class LoginViewModel @Inject constructor(
         _errorMessage.value = null
     }
 
+    fun deleteAutoLogin(){
+        sessionManager.clearToken()
+    }
+
     fun checkAutoLogin() {
         val savedToken = sessionManager.getToken()
         if (!savedToken.isNullOrBlank()) {
@@ -66,8 +70,7 @@ class LoginViewModel @Inject constructor(
                 try {
                     val response = authRepository.verifyToken(VerifyTokenRequest(savedToken))
                     val userRole = response.data?.user?.role
-
-                        _navigationEvent.emit(Routes.USER_DASHBOARD)
+                    _navigationEvent.emit(Routes.USER_DASHBOARD)
 
                 } catch (e: Exception) {
                     Log.e("AutoLogin", "Failed: ${e.message}")
@@ -105,6 +108,10 @@ class LoginViewModel @Inject constructor(
                                     // Check user role and navigate accordingly
                                     val userRole = response.data?.user?.role
                                     if (userRole?.equals("user", ignoreCase = true) == true || userRole?.equals("buyer", ignoreCase = true) == true) {
+                                        response.data?.user?.id?.let { userId ->
+                                            sessionManager.saveUserId(userId)
+                                            Log.d("Login", "User ID saved: $userId")
+                                        }
                                         _navigationEvent.emit(Routes.USER_DASHBOARD)
                                     } else {
                                         // For other roles, you can add navigation to their respective screens
@@ -221,6 +228,10 @@ class LoginViewModel @Inject constructor(
                                         // Check user role and navigate accordingly
                                         val userRole = response.data?.user?.role
                                         if (userRole?.equals("user", ignoreCase = true) == true || userRole?.equals("buyer", ignoreCase = true) == true) {
+                                            response.data?.user?.id?.let { userId ->
+                                                sessionManager.saveUserId(userId)
+                                                Log.d("Login", "User ID saved: $userId")
+                                            }
                                             _navigationEvent.emit(Routes.USER_DASHBOARD)
                                         } else {
                                             // For other roles, you can add navigation to their respective screens

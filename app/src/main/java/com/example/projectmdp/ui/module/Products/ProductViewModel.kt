@@ -1,7 +1,8 @@
 package com.example.projectmdp.ui.module.Products
 
-import android.content.Context // <--- ADD THIS IMPORT
+import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.SavedStateHandle
@@ -11,8 +12,9 @@ import com.example.projectmdp.data.repository.ProductRepository
 import com.example.projectmdp.data.repository.UserRepository
 import com.example.projectmdp.data.source.dataclass.Product
 import com.example.projectmdp.data.source.dataclass.User
+import com.example.projectmdp.data.source.local.SessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext // <--- ADD THIS IMPORT for Hilt's ApplicationContext qualifier
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -22,7 +24,8 @@ class ProductViewModel @Inject constructor(
     private val productRepository: ProductRepository,
     private val userRepository: UserRepository,
     private val savedStateHandle: SavedStateHandle,
-    @ApplicationContext private val applicationContext: Context // <--- INJECT APPLICATION CONTEXT HERE
+    private val sessionManager: SessionManager,
+    @ApplicationContext private val applicationContext: Context
 ) : ViewModel() {
     private val _products = MutableLiveData<List<Product>>()
     val products: LiveData<List<Product>> = _products
@@ -45,16 +48,30 @@ class ProductViewModel @Inject constructor(
     private val _productCreationSuccess = MutableLiveData<Boolean>()
     val productCreationSuccess: LiveData<Boolean> = _productCreationSuccess
 
+    // ADDED: LiveData for product update success
+    private val _productUpdateSuccess = MutableLiveData<Boolean>()
+    val productUpdateSuccess: LiveData<Boolean> = _productUpdateSuccess
+
+    private val _currentLoggedInUserId = MutableLiveData<String?>()
+    val currentLoggedInUserId: LiveData<String?> = _currentLoggedInUserId
+
     init {
         if (productId.isNotEmpty()) {
             fetchProductById(productId)
         }
+        _currentLoggedInUserId.value = sessionManager.getUserId()
+        Log.d("ProductViewModel", "Current Logged In User ID: ${_currentLoggedInUserId.value}")
     }
 
-    fun setSelectedProduct(product: Product) {
+    fun setSelectedProduct(product: Product?) { // Changed to nullable to allow clearing
         _selectedProduct.value = product
-        fetchSelectedProductSeller()
+        if (product != null) {
+            fetchSelectedProductSeller()
+        } else {
+            _selectedProductSeller.value = null // Clear seller if product is null
+        }
     }
+
 
     fun fetchSelectedProductSeller() {
         _isLoading.value = true
@@ -87,7 +104,6 @@ class ProductViewModel @Inject constructor(
         _errorMessage.value = null
 
         viewModelScope.launch {
-            // Note: productRepository.getProductById doesn't need context, only addProduct/updateProduct
             productRepository.getProductById(productId).collect { result ->
                 _isLoading.value = false
                 result.onSuccess { product ->
@@ -117,7 +133,6 @@ class ProductViewModel @Inject constructor(
         }
     }
 
-    // --- THIS IS THE CRITICAL CHANGE ---
     fun createProduct(name: String, description: String, price: Double, category: String, imageUri: Uri?) {
         _isLoading.value = true
         _errorMessage.value = null
@@ -125,7 +140,7 @@ class ProductViewModel @Inject constructor(
 
         viewModelScope.launch {
             productRepository.addProduct(
-                applicationContext, // <--- PASS THE INJECTED APPLICATION CONTEXT HERE
+                applicationContext,
                 name,
                 description,
                 price,
@@ -144,13 +159,74 @@ class ProductViewModel @Inject constructor(
         }
     }
 
-    // You might also need to update this if you use imageUri in updateProduct
+    private val _productDeletionSuccess = MutableLiveData<Boolean>()
+    val productDeletionSuccess: LiveData<Boolean> = _productDeletionSuccess
+
+    fun deleteProduct(productId: String) {
+        _isLoading.value = true
+        _errorMessage.value = null
+        _productDeletionSuccess.value = false
+
+        viewModelScope.launch {
+            productRepository.deleteProduct(productId).collect { result ->
+                _isLoading.value = false
+                result.onSuccess {
+                    _errorMessage.value = null
+                    _productDeletionSuccess.value = true
+                }.onFailure { throwable ->
+                    _errorMessage.value = throwable.message ?: "Failed to delete product."
+                    _productDeletionSuccess.value = false
+                }
+            }
+        }
+    }
+
+    // CORRECTED: updateProduct function signature and call to repository
+    fun updateProduct(
+        productId: String,
+        name: String,
+        description: String,
+        price: Double,
+        category: String,
+        imageUri: Uri? // Pass imageUri from Composable
+    ) {
+        _isLoading.value = true
+        _errorMessage.value = null
+        _productUpdateSuccess.value = false // Use the new update success LiveData
+
+        viewModelScope.launch {
+            productRepository.updateProduct(
+                productId,
+                name,
+                description,
+                price,
+                category,
+                imageUri // Pass imageUri
+            ).collect { result ->
+                _isLoading.value = false
+                result.onSuccess { updatedProduct ->
+                    _errorMessage.value = null
+                    _productUpdateSuccess.value = true
+                    _selectedProduct.value = updatedProduct // Update selected product LiveData
+                }.onFailure { throwable ->
+                    _errorMessage.value = throwable.message ?: "Failed to update product."
+                    _productUpdateSuccess.value = false
+                }
+            }
+        }
+    }
 
     fun resetProductCreationStatus() {
         _productCreationSuccess.value = false
+        // Also reset product update status if they share the same success UI message/navigation logic
+        _productUpdateSuccess.value = false
     }
 
-    // Add a function to clear error messages if needed for UI control
+    // You might also want a separate reset function for update status if your UI handles them differently
+    fun resetProductUpdateStatus() {
+        _productUpdateSuccess.value = false
+    }
+
     fun clearErrorMessage() {
         _errorMessage.value = null
     }

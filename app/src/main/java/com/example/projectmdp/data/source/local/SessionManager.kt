@@ -9,6 +9,7 @@ class SessionManager(context: Context) {
 
     companion object {
         private const val KEY_TOKEN = "id_token"
+        private const val KEY_USER_ID = "current_user_id"
     }
 
     fun saveToken(token: String) {
@@ -20,6 +21,18 @@ class SessionManager(context: Context) {
     }
 
     fun clearToken() {
-        prefs.edit().remove(KEY_TOKEN).apply()
+        prefs.edit().remove(KEY_TOKEN).remove(KEY_USER_ID).apply()
+    }
+
+    fun saveUserId(userId: String) {
+        prefs.edit().putString(KEY_USER_ID, userId).apply()
+    }
+
+    fun getUserId(): String? {
+        return prefs.getString(KEY_USER_ID, null)
+    }
+
+    fun clearUserId() {
+        prefs.edit().remove(KEY_USER_ID).apply()
     }
 }

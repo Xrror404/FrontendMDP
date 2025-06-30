@@ -1,5 +1,6 @@
 package com.example.projectmdp.data.repository
 
+import android.util.Log
 import com.example.projectmdp.data.source.dataclass.Transaction
 import com.example.projectmdp.data.source.dataclass.User
 import com.example.projectmdp.data.source.dataclass.Product
@@ -10,6 +11,7 @@ import com.example.projectmdp.data.source.remote.TransactionApi
 import com.example.projectmdp.data.source.remote.CreateTransactionRequest
 import com.example.projectmdp.data.source.remote.UpdateTransactionStatusRequest
 import com.example.projectmdp.data.source.response.*
+import com.google.gson.Gson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -31,12 +33,33 @@ data class CreateTransactionResult(
 
 // Extension functions untuk mapping
 fun com.example.projectmdp.data.source.response.Transaction.toTransaction(): Transaction {
+    // Validate required fields
+    Log.d("TransactionMapping", "${product.product_id}")
+    val productId = this.product.product_id
+    val productName = this.product.name
+    val sellerId = this.user_seller.id
+    
+    android.util.Log.d("TransactionMapping", "Mapping transaction:")
+    android.util.Log.d("TransactionMapping", "Product ID: $productId")
+    android.util.Log.d("TransactionMapping", "Product Name: $productName")
+    android.util.Log.d("TransactionMapping", "Seller ID: $sellerId")
+    
+    if (productId.isNullOrEmpty()) {
+        throw IllegalArgumentException("Product ID cannot be null or empty")
+    }
+    if (productName.isNullOrEmpty()) {
+        throw IllegalArgumentException("Product name cannot be null or empty")
+    }
+    if (sellerId.isNullOrEmpty()) {
+        throw IllegalArgumentException("Seller ID cannot be null or empty")
+    }
+    
     return Transaction(
         transaction_id = this.transaction_id,
         seller = User(
-            id = this.user_seller.id,
-            email = this.user_seller.email,
-            username = this.user_seller.name,
+            id = sellerId,
+            email = this.user_seller.email ?: "",
+            username = this.user_seller.name ?: "",
             phone_number = this.user_seller.phone ?: "",
             profile_picture = this.user_seller.profile_picture,
             address = "",
@@ -48,18 +71,18 @@ fun com.example.projectmdp.data.source.response.Transaction.toTransaction(): Tra
         ),
         buyer_email = this.email_buyer,
         product = Product(
-            product_id = this.product.product_id,
-            name = this.product.name,
+            product_id = productId,
+            name = productName,
             description = this.product.description,
-            price = this.product.price,
-            category = this.product.category,
+            price = this.product.price ?: 0.0,
+            category = this.product.category ?: "",
             image = this.product.image_url ?: "",
-            user_id = this.user_seller.id,
+            user_id = sellerId,
             created_at = "",
             deleted_at = null
         ),
-        quantity = this.quantity,
-        total_price = this.total_price,
+        quantity = this.quantity ?: 1,
+        total_price = this.product!!.price!!,
         datetime = this.datetime,
         payment_id = this.payment_id,
         payment_status = this.payment_status,
@@ -79,11 +102,26 @@ fun com.example.projectmdp.data.source.response.Transaction.toTransaction(): Tra
 }
 
 fun com.example.projectmdp.data.source.response.Transaction.toTransactionEntity(): TransactionEntity {
+    // Validate required fields
+    val productId = this.product.product_id
+    val sellerId = this.user_seller.id
+    
+    android.util.Log.d("TransactionMapping", "Mapping to entity:")
+    android.util.Log.d("TransactionMapping", "Product ID: $productId")
+    android.util.Log.d("TransactionMapping", "Seller ID: $sellerId")
+    
+    if (productId.isNullOrEmpty()) {
+        throw IllegalArgumentException("Product ID cannot be null or empty for entity mapping")
+    }
+    if (sellerId.isNullOrEmpty()) {
+        throw IllegalArgumentException("Seller ID cannot be null or empty for entity mapping")
+    }
+    
     return TransactionEntity(
         transaction_id = this.transaction_id,
-        user_seller_id = this.user_seller.id,
+        user_seller_id = sellerId,
         email_buyer = this.email_buyer,
-        product_id = this.product.product_id,
+        product_id = productId,
         quantity = this.quantity,
         total_price = this.total_price,
         datetime = this.datetime,
@@ -146,10 +184,20 @@ class TransactionRepository @Inject constructor(
     ): Flow<Result<CreateTransactionResult>> = flow {
         try {
             val request = CreateTransactionRequest(productId, quantity, total_price)
-            val response = RetrofitInstance.Transactionapi.createTransaction(request)
+            android.util.Log.d("TransactionRepository", "Creating transaction for product: $productId, quantity: $quantity, price: $total_price")
             
+            val response = RetrofitInstance.Transactionapi.createTransaction(request)
+            val rawJson = Gson().toJson(response)
+            Log.d("RawTransactionJSON", rawJson)
+//            Log.d("TransactionRepository", "${response.data?.transaction}")
             if (response.isSuccess()) {
                 response.data?.let { responseData ->
+                    android.util.Log.d("TransactionRepository", "Transaction API response received")
+                    android.util.Log.d("TransactionRepository", "Product ID from response: ${responseData.transaction.product.product_id}")
+                    android.util.Log.d("TransactionRepository", "Product name from response: ${responseData.transaction.product.name}")
+                    android.util.Log.d("TransactionRepository", "Snap token: ${responseData.snap_token}")
+                    android.util.Log.d("TransactionRepository", "Redirect URL: ${responseData.redirect_url}")
+
                     val transaction = responseData.transaction.toTransaction()
                     
                     // Cache to local database
@@ -162,21 +210,21 @@ class TransactionRepository @Inject constructor(
                         redirectUrl = responseData.redirect_url
                     )
 
-//                    data class CreateTransactionData(
-//                        val transaction: com.example.projectmdp.data.source.response.Transaction,
-//                        val snap_token: String,
-//                        val redirect_url: String
-//                    )
-
                     // Cache related user and product data
                     cacheRelatedData(responseData.transaction)
                     
+                    android.util.Log.d("TransactionRepository", "Transaction created successfully")
                     emit(Result.success(result))
-                } ?: emit(Result.failure(Exception("No transaction data received")))
+                } ?: run {
+                    android.util.Log.e("TransactionRepository", "No transaction data received")
+                    emit(Result.failure(Exception("No transaction data received")))
+                }
             } else {
+                android.util.Log.e("TransactionRepository", "API error: ${response.error}")
                 emit(Result.failure(Exception(response.error ?: "Failed to create transaction")))
             }
         } catch (e: Exception) {
+            android.util.Log.e("TransactionRepository", "Exception creating transaction", e)
             emit(Result.failure(e))
         }
     }
@@ -184,34 +232,51 @@ class TransactionRepository @Inject constructor(
     // Get My Transactions (Cache-First + Remote Sync)
     suspend fun getMyTransactions(forceRefresh: Boolean = false): Flow<Result<List<Transaction>>> = flow {
         try {
+            android.util.Log.d("TransactionRepository", "getMyTransactions called, forceRefresh: $forceRefresh")
+            
             // Emit cached data first for better UX
             if (!forceRefresh) {
                 val cachedTransactions = buildTransactionsFromCache()
+                android.util.Log.d("TransactionRepository", "Found ${cachedTransactions.size} cached transactions")
                 if (cachedTransactions.isNotEmpty()) {
                     emit(Result.success(cachedTransactions))
                 }
             }
 
             // Fetch from remote
+            android.util.Log.d("TransactionRepository", "Fetching transactions from remote API")
             val response = RetrofitInstance.Transactionapi.getMyTransactions()
+            android.util.Log.d("TransactionRepository", "API response success: ${response.isSuccess()}")
+            
             if (response.isSuccess()) {
                 response.data?.let { responseData ->
-                    val transactions = responseData.transactions.map { it.toTransaction() }
+                    android.util.Log.d("TransactionRepository", "Received ${responseData.transactions.size} transactions from API")
+                    val transactions = responseData.transactions.map { apiTransaction ->
+                        android.util.Log.d("TransactionRepository", "Mapping transaction: ${apiTransaction.transaction_id}")
+                        apiTransaction.toTransaction()
+                    }
                     
                     // Cache to local database
                     val transactionEntities = responseData.transactions.map { it.toTransactionEntity() }
                     transactionDao.deleteAllTransactions() // Clear old cache
                     transactionDao.insertTransactions(transactionEntities)
+                    android.util.Log.d("TransactionRepository", "Cached ${transactionEntities.size} transactions to local DB")
                     
                     // Cache related data
                     responseData.transactions.forEach { cacheRelatedData(it) }
                     
+                    android.util.Log.d("TransactionRepository", "Emitting ${transactions.size} transactions")
                     emit(Result.success(transactions))
-                } ?: emit(Result.failure(Exception("No transactions received")))
+                } ?: run {
+                    android.util.Log.e("TransactionRepository", "API response data is null")
+                    emit(Result.failure(Exception("No transactions received")))
+                }
             } else {
+                android.util.Log.e("TransactionRepository", "API error: ${response.error}")
                 // Return cached data if remote fails
                 val cachedTransactions = buildTransactionsFromCache()
                 if (cachedTransactions.isNotEmpty()) {
+                    android.util.Log.d("TransactionRepository", "Using cached transactions due to API error")
                     if (!forceRefresh) {
                         // Already emitted above
                     } else {
@@ -222,17 +287,55 @@ class TransactionRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
+            android.util.Log.e("TransactionRepository", "Exception in getMyTransactions", e)
             // Fallback to cached data
             try {
                 val cachedTransactions = buildTransactionsFromCache()
                 if (cachedTransactions.isNotEmpty()) {
+                    android.util.Log.d("TransactionRepository", "Using cached transactions due to exception")
                     emit(Result.success(cachedTransactions))
                 } else {
                     emit(Result.failure(e))
                 }
             } catch (cacheError: Exception) {
+                android.util.Log.e("TransactionRepository", "Cache error", cacheError)
                 emit(Result.failure(e))
             }
+        }
+    }
+
+    // Get Transaction by ID (Simplified for Payment Status Check)
+    suspend fun getTransactionById(transactionId: String): Flow<Result<Transaction>> = flow {
+        try {
+            // Check cache first
+            transactionDao.getTransactionById(transactionId)?.let { transactionEntity ->
+                val transaction = buildTransactionFromEntity(transactionEntity)
+                emit(Result.success(transaction))
+            }
+
+            // Fetch from remote for fresh data
+            val response = RetrofitInstance.Transactionapi.getTransactionById(transactionId)
+            if (response.isSuccess()) {
+                response.data?.let { responseData ->
+                    val transaction = responseData.transaction.toTransaction()
+                    
+                    // Update cache
+                    val transactionEntity = responseData.transaction.toTransactionEntity()
+                    transactionDao.insertTransaction(transactionEntity)
+                    
+                    // Cache related data
+                    cacheRelatedData(responseData.transaction)
+                    
+                    emit(Result.success(transaction))
+                } ?: emit(Result.failure(Exception("Transaction not found")))
+            } else {
+                // If remote fails but we have cache, that's OK (already emitted above)
+                transactionDao.getTransactionById(transactionId) ?: emit(
+                    Result.failure(Exception(response.error ?: "Transaction not found"))
+                )
+            }
+        } catch (e: Exception) {
+            emit(Result.failure(e))
         }
     }
 

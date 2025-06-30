@@ -23,7 +23,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,68 +33,61 @@ import coil.request.ImageRequest
 import com.example.projectmdp.navigation.Routes
 import java.text.NumberFormat
 import java.util.Locale
-import androidx.navigation.compose.currentBackStackEntryAsState // <--- ADD THIS IMPORT
+import androidx.navigation.compose.currentBackStackEntryAsState
 
 @Composable
 fun UserDashboardScreen(
     viewModel: UserDashboardViewModel = viewModel(),
-    modifier: Modifier = Modifier,
-    navController: NavController
+    navController: NavController,
+    modifier: Modifier = Modifier
 ) {
-    // Original state observations (assuming viewModel's mutableStateOf are properly observed)
     val searchQuery = viewModel.searchQuery
-    val products = viewModel.products // Still mutableStateListOf or mutableStateOf<List<Product>>
+    val products = viewModel.products
     val userInitials = viewModel.userInitials
     val isLoading = viewModel.isLoading
 
-    // Get the current back stack entry to observe navigation results
     val navBackStackEntry by navController.currentBackStackEntryAsState()
+    var showProfileMenu by remember { mutableStateOf(false) }
 
-    // --- START: Minimal change for refresh logic ---
-    // This LaunchedEffect will run whenever navBackStackEntry changes (e.g., when you navigate back)
     LaunchedEffect(navBackStackEntry) {
-        // Check if a "shouldRefreshDashboard" flag was set in the previous screen's SavedStateHandle
         val shouldRefresh = navBackStackEntry?.savedStateHandle?.get<Boolean>("shouldRefreshDashboard")
         if (shouldRefresh == true) {
             Log.d("UserDashboard", "Received refresh signal. Reloading products...")
-            // Call the ViewModel's loadProducts function to fetch fresh data
-            viewModel.loadProducts(forceRefresh = true) // Pass true to ensure data is re-fetched from source
-            // IMPORTANT: Remove the flag to prevent it from triggering again on subsequent recompositions
+            viewModel.loadProducts(forceRefresh = true)
             navBackStackEntry?.savedStateHandle?.remove<Boolean>("shouldRefreshDashboard")
         }
     }
-    // --- END: Minimal change for refresh logic ---
-
+    LaunchedEffect(Unit) { // 'Unit' as a key ensures this block runs once when the Composable first enters the Composition
+        Log.d("UserDashboard", "UserDashboardScreen initialized. Loading products initially.")
+        viewModel.loadProducts(forceRefresh = true) // Load products immediately
+    }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Top Bar with Logo and Profile
             TopBar(
                 userInitials = userInitials,
-                onProfileClick = { /* Handle profile click */ }
+                onProfileClick = { showProfileMenu = true },
+                onChatClick = { navController.navigate(Routes.CHAT_LIST)}
             )
 
-            // Search Bar
             SearchBar(
                 searchQuery = searchQuery,
                 onSearchChange = { viewModel.onSearchQueryChange(it) },
                 onSearchSubmit = {
                     if (searchQuery.isBlank()) {
-                        viewModel.loadProducts(forceRefresh = true) // Force refresh on blank search submit
+                        viewModel.loadProducts(forceRefresh = true)
                     } else {
                         viewModel.searchProducts()
                     }
                 }
             )
 
-            // Products List
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -140,7 +132,27 @@ fun UserDashboardScreen(
             }
         }
 
-        // Floating Action Button
+        if (showProfileMenu) {
+            ProfileMenuPopup(
+                onDismiss = { showProfileMenu = false },
+                onEditProfile = {
+                    showProfileMenu = false
+                    navController.navigate(Routes.EDIT_PROFILE)
+                },
+                onTransactionHistory = {
+                    showProfileMenu = false
+                    navController.navigate(Routes.TRANSACTION_HISTORY)
+                },
+                onLogout = {
+                    showProfileMenu = false
+                    viewModel.logout()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.USER_DASHBOARD) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         FloatingActionButton(
             onClick = { navController.navigate(Routes.ADD_PRODUCT) },
             modifier = Modifier
@@ -157,11 +169,11 @@ fun UserDashboardScreen(
     }
 }
 
-
 @Composable
 private fun TopBar(
     userInitials: String,
-    onProfileClick: () -> Unit
+    onProfileClick: () -> Unit,
+    onChatClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -170,7 +182,6 @@ private fun TopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // WeCycle Logo
         Text(
             text = "WeCycle",
             style = MaterialTheme.typography.headlineMedium,
@@ -178,21 +189,34 @@ private fun TopBar(
             color = MaterialTheme.colorScheme.primary
         )
 
-        // User Profile Circle
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
-                .clickable { onProfileClick() },
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = userInitials,
-                color = MaterialTheme.colorScheme.onPrimary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Chat Icon Button
+            IconButton(onClick = onChatClick) {
+                Icon(
+                    painter = painterResource(id = R.drawable.chat_24px), // make sure this exists
+                    contentDescription = "Messages",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // User Profile Circle
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable { onProfileClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = userInitials,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            }
         }
     }
 }
@@ -248,7 +272,6 @@ private fun ProductCard(
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Product Image
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -262,11 +285,10 @@ private fun ProductCard(
                     contentDescription = product.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
-                    error = painterResource(id = R.drawable.alert_error), // Add a placeholder drawable
-                    placeholder = painterResource(id = R.drawable.landscape_placeholder) // Add a placeholder drawable
+                    error = painterResource(id = R.drawable.alert_error),
+                    placeholder = painterResource(id = R.drawable.landscape_placeholder)
                 )
 
-                // Price Tag
                 Surface(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
@@ -283,7 +305,6 @@ private fun ProductCard(
                 }
             }
 
-            // Product Info
             Column(
                 modifier = Modifier.padding(16.dp)
             ) {
@@ -308,7 +329,6 @@ private fun ProductCard(
                     )
                 }
 
-                // Category Tag
                 if (product.hasCategory()) {
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer,
@@ -324,43 +344,142 @@ private fun ProductCard(
                     }
                 }
 
-                // Action Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
-                        onClick = onBuyClick,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
+//                    Button(
+//                        onClick = onBuyClick,
+//                        modifier = Modifier.weight(1f),
+//                        shape = RoundedCornerShape(8.dp),
+//                        colors = ButtonDefaults.buttonColors(
+//                            containerColor = MaterialTheme.colorScheme.primary
+//                        )
+//                    ) {
+//                        Icon(
+//                            imageVector = Icons.Default.ShoppingCart,
+//                            contentDescription = "Buy",
+//                            modifier = Modifier.size(16.dp)
+//                        )
+//                        Spacer(modifier = Modifier.width(4.dp))
+//                        Text("Buy", fontSize = 12.sp)
+//                    }
+
+//                    OutlinedButton(
+//                        onClick = onChatClick,
+//                        modifier = Modifier.weight(1f),
+//                        shape = RoundedCornerShape(8.dp),
+//                        colors = ButtonDefaults.outlinedButtonColors(
+//                            contentColor = MaterialTheme.colorScheme.primary
+//                        )
+//                    ) {
+//                        Icon(
+//                            painter = painterResource(id = R.drawable.chat_24px),
+//                            contentDescription = "Chat",
+//                            modifier = Modifier.size(16.dp)
+//                        )
+//                        Spacer(modifier = Modifier.width(4.dp))
+//                        Text("Chat", fontSize = 12.sp)
+//                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProfileMenuPopup(
+    onDismiss: () -> Unit,
+    onEditProfile: () -> Unit,
+    onTransactionHistory: () -> Unit,
+    onLogout: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.3f))
+            .clickable { onDismiss() }
+    ) {
+        Card(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 60.dp, end = 16.dp)
+                .width(200.dp)
+                .clickable { /* Prevent dismissing when clicking inside the card */ },
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(8.dp)
+            ) {
+                TextButton(
+                    onClick = onEditProfile,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+//                        Icon(
+//                            painter = painterResource(id = R.drawable.person_24px),
+//                            contentDescription = "Edit Profile",
+//                            modifier = Modifier.size(20.dp)
+//                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Edit Profile")
+                    }
+                }
+
+                TextButton(
+                    onClick = onTransactionHistory,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.ShoppingCart,
-                            contentDescription = "Buy",
-                            modifier = Modifier.size(16.dp)
+                            contentDescription = "Transaction History",
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Buy", fontSize = 12.sp)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Transaction History")
                     }
+                }
 
-                    OutlinedButton(
-                        onClick = onChatClick,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary
-                        )
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                )
+
+                TextButton(
+                    onClick = onLogout,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.chat_24px),
-                            contentDescription = "Chat",
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Chat", fontSize = 12.sp)
+//                        Icon(
+//                            painter = painterResource(id = R.drawable.logout_24px),
+//                            contentDescription = "Logout",
+//                            modifier = Modifier.size(20.dp)
+//                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Logout")
                     }
                 }
             }

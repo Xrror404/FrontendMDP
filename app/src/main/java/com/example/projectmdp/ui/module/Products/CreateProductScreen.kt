@@ -25,7 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel // Use hiltViewModel consistently
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.projectmdp.R
@@ -34,25 +34,28 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import android.content.Context
 import androidx.compose.material.icons.filled.AddCircle
-import androidx.navigation.compose.currentBackStackEntryAsState // <--- ADD THIS IMPORT
+import androidx.navigation.compose.currentBackStackEntryAsState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateProductScreen(
-    viewModel: ProductViewModel = viewModel(),
-    navController: NavController
+    viewModel: ProductViewModel = hiltViewModel(), // Changed to hiltViewModel()
+    navController: NavController,
+    productId: String? = null // ADDED: Accept nullable productId for update mode
 ) {
     // State for input fields
     var productName by remember { mutableStateOf("") }
     var productDescription by remember { mutableStateOf("") }
     var productPrice by remember { mutableStateOf("") }
     var productCategory by remember { mutableStateOf("") }
-    var productImageUri by remember { mutableStateOf<Uri?>(null) }
+    var productImageUri by remember { mutableStateOf<Uri?>(null) } // Local state for selected new image
 
     // Observe ViewModel states
     val isLoading by viewModel.isLoading.observeAsState(initial = false)
     val errorMessage by viewModel.errorMessage.observeAsState()
     val productCreationSuccess by viewModel.productCreationSuccess.observeAsState()
+    val productUpdateSuccess by viewModel.productUpdateSuccess.observeAsState() // Observe update success
+    val selectedProduct by viewModel.selectedProduct.observeAsState() // Observe product for pre-filling fields
 
     val context: Context = LocalContext.current
 
@@ -60,17 +63,47 @@ fun CreateProductScreen(
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        productImageUri = uri
+        productImageUri = uri // Update local state for new image URI
     }
 
-    // Effect to observe product creation success and navigate back
-    LaunchedEffect(productCreationSuccess) {
-        if (productCreationSuccess == true) {
-            Toast.makeText(context, "Product created successfully!", Toast.LENGTH_SHORT).show()
-            viewModel.resetProductCreationStatus() // Reset flag to allow re-creation
+    // Effect to load product data if productId is provided (for update mode)
+    LaunchedEffect(productId) {
+        if (productId != null) {
+            viewModel.fetchProductById(productId)
+        } else {
+            // Clear fields if navigating from update mode to add mode
+            productName = ""
+            productDescription = ""
+            productPrice = ""
+            productCategory = ""
+            productImageUri = null
+            viewModel.setSelectedProduct(null) // Clear selected product in ViewModel
+        }
+    }
 
-            // --- IMPORTANT: Set a result on the previous back stack entry ---
-            // This is how you signal to the previous screen (UserDashboardScreen) to refresh
+    // Effect to populate fields once selectedProduct is loaded for update
+    LaunchedEffect(selectedProduct) {
+        selectedProduct?.let { product ->
+            // Only populate fields if this is an update scenario AND the loaded product matches the ID
+            if (productId != null && product.product_id == productId) {
+                productName = product.name
+                productDescription = product.description ?: ""
+                productPrice = product.price.toString()
+                productCategory = product.category
+                // Set image URI if exists, otherwise it will remain null (showing placeholder)
+                productImageUri = product.image?.let { Uri.parse(it) }
+            }
+        }
+    }
+
+    // Effect to observe product creation/update success and navigate back
+    LaunchedEffect(productCreationSuccess, productUpdateSuccess) { // Observe both success flags
+        if (productCreationSuccess == true || productUpdateSuccess == true) {
+            val operationType = if (productId == null) "created" else "updated"
+            Toast.makeText(context, "Product $operationType successfully!", Toast.LENGTH_SHORT).show()
+            viewModel.resetProductCreationStatus() // Resets both flags now if using a combined method
+
+            // Signal to previous screen (UserDashboardScreen) to refresh
             navController.previousBackStackEntry?.savedStateHandle?.set("shouldRefreshDashboard", true)
 
             navController.popBackStack() // Navigate back to previous screen
@@ -88,7 +121,7 @@ fun CreateProductScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Add New Product") },
+                title = { Text(if (productId == null) "Add New Product" else "Update Product") }, // Dynamic title
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -198,20 +231,33 @@ fun CreateProductScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Add Product Button
+            // Add/Update Product Button
             Button(
                 onClick = {
                     val priceDouble = productPrice.toDoubleOrNull()
                     if (productName.isBlank() || productDescription.isBlank() || priceDouble == null || productCategory.isBlank() || productImageUri == null) {
                         Toast.makeText(context, "Please fill all fields and select an image.", Toast.LENGTH_SHORT).show()
                     } else {
-                        viewModel.createProduct(
-                            productName,
-                            productDescription,
-                            priceDouble,
-                            productCategory,
-                            productImageUri
-                        )
+                        if (productId == null) {
+                            // ADD PRODUCT logic
+                            viewModel.createProduct(
+                                productName,
+                                productDescription,
+                                priceDouble,
+                                productCategory,
+                                productImageUri
+                            )
+                        } else {
+                            // UPDATE PRODUCT logic
+                            viewModel.updateProduct(
+                                productId, // Pass the existing product ID
+                                productName,
+                                productDescription,
+                                priceDouble,
+                                productCategory,
+                                productImageUri // Pass the potentially new image URI
+                            )
+                        }
                     }
                 },
                 modifier = Modifier
@@ -222,7 +268,7 @@ fun CreateProductScreen(
                 if (isLoading) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
                 } else {
-                    Text("Add Product")
+                    Text(if (productId == null) "Add Product" else "Update Product") // Dynamic button text
                 }
             }
         }

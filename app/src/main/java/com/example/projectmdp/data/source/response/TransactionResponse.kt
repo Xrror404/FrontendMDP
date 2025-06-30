@@ -1,5 +1,7 @@
 package com.example.projectmdp.data.source.response
 
+import com.google.gson.annotations.SerializedName
+
 data class Transaction(
     val transaction_id: String,
     val user_seller: UserSeller,
@@ -25,19 +27,20 @@ data class Transaction(
 )
 
 data class UserSeller(
-    val id: String,
-    val name: String,
-    val email: String,
+    val id: String?,
+    val name: String?,
+    val email: String?,
     val phone: String?,
     val profile_picture: String?
 )
 
 data class ProductInfo(
-    val product_id: String,
-    val name: String,
-    val description: String,
-    val price: Double,
-    val category: String,
+//    @SerializedName("id")
+    val product_id: String?,
+    val name: String?,
+    val description: String?,
+    val price: Double?,
+    val category: String?,
     val image_url: String?
 )
 

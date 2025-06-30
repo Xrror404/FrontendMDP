@@ -7,10 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.projectmdp.data.repository.ProductRepository
 import com.example.projectmdp.data.repository.TransactionRepository
 import com.example.projectmdp.data.source.dataclass.Product
-import com.example.projectmdp.data.source.remote.CreateTransactionRequest
-import com.example.projectmdp.data.source.remote.RetrofitInstance
-import com.example.projectmdp.data.source.response.MidtransResponse
-import com.example.projectmdp.data.source.response.isSuccess
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +17,10 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class MidtransViewModel @Inject constructor() : ViewModel() {
+class MidtransViewModel @Inject constructor(
+    private val transactionRepository: TransactionRepository,
+    private val productRepository: ProductRepository
+) : ViewModel() {
 
     // UI States
     private val _isLoading = mutableStateOf(false)
@@ -58,46 +57,71 @@ class MidtransViewModel @Inject constructor() : ViewModel() {
         _selectedProduct.value = product
     }
 
-    fun createTransaction(quantity: Int = 1) {
-        val product = _selectedProduct.value ?: return
-
+    fun loadProduct(productId: String) {
+        Log.d("MidtransViewModel", "Starting loadProduct for ID: $productId")
         _isLoading.value = true
+        _errorMessage.value = null // Clear previous errors
+        
         viewModelScope.launch {
             try {
-                // Product details for Midtrans
-//                val orderDetails = mapOf(
-//                    "product_id" to product.product_id,
-//                    "quantity" to quantity,
-//                    "price" to product.price
-//                )
-
-                val orderDetails = CreateTransactionRequest(
-                    product.product_id,
-                    quantity,
-                    product.price
-                )
-
-
-
-                // Call API to create transaction
-                val response = RetrofitInstance.Transactionapi.createTransaction(orderDetails)
-
-                if (response.isSuccess()) {
-                    val data = response.data
-                    if (data != null && data.snap_token != null && data.redirect_url != null) {
-                        _paymentToken.value = data.snap_token
-                        _paymentUrl.value = data.redirect_url
-                        _paymentStatus.value = PaymentStatus.PENDING
-                    } else {
-                        _errorMessage.value = "Invalid payment data received"
+                productRepository.getProductById(productId).collect { result ->
+                    result.onSuccess { product ->
+                        _selectedProduct.value = product
+                        _isLoading.value = false
+                        Log.d("MidtransViewModel", "Product loaded successfully: ${product.name} (ID: ${product.product_id})")
+                    }.onFailure { error ->
+                        _errorMessage.value = "Failed to load product: ${error.localizedMessage ?: error.message}"
+                        _isLoading.value = false
+                        Log.e("MidtransViewModel", "Error loading product with ID: $productId", error)
                     }
-                } else {
-                    _errorMessage.value = response.error ?: "Failed to create transaction"
                 }
             } catch (e: Exception) {
-                Log.e("MidtransViewModel", "Error creating transaction", e)
+                _errorMessage.value = "Failed to load product: ${e.message}"
+                _isLoading.value = false
+                Log.e("MidtransViewModel", "Exception loading product with ID: $productId", e)
+            }
+        }
+    }
+
+    fun createTransaction(quantity: Int = 1) {
+        val product = _selectedProduct.value ?: run {
+            val errorMsg = "Product not selected - cannot create transaction"
+            _errorMessage.value = errorMsg
+            Log.e("MidtransViewModel", errorMsg)
+            return
+        }
+
+        Log.d("MidtransViewModel", "Starting createTransaction for product: ${product.name} (ID: ${product.product_id}), quantity: $quantity")
+        _isLoading.value = true
+        _errorMessage.value = null // Clear previous errors
+        
+        viewModelScope.launch {
+            try {
+                val totalPrice = product.price * quantity
+                Log.d("MidtransViewModel", "Total price calculated: $totalPrice")
+                
+                transactionRepository.createTransaction(
+                    productId = product.product_id,
+                    quantity = quantity,
+                    total_price = totalPrice
+                ).collect { result ->
+                    result.onSuccess { createResult ->
+                        _paymentToken.value = createResult.snapToken
+                        _paymentUrl.value = createResult.redirectUrl
+                        _paymentStatus.value = PaymentStatus.PENDING
+                        _isLoading.value = false
+                        Log.d("MidtransViewModel", "Transaction created successfully")
+                        Log.d("MidtransViewModel", "Snap token: ${createResult.snapToken}")
+                        Log.d("MidtransViewModel", "Redirect URL: ${createResult.redirectUrl}")
+                    }.onFailure { error ->
+                        _errorMessage.value = "Failed to create transaction: ${error.localizedMessage ?: error.message}"
+                        _isLoading.value = false
+                        Log.e("MidtransViewModel", "Error creating transaction for product: ${product.product_id}", error)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("MidtransViewModel", "Exception creating transaction for product: ${product.product_id}", e)
                 _errorMessage.value = "Failed to create transaction: ${e.message}"
-            } finally {
                 _isLoading.value = false
             }
         }
@@ -107,23 +131,25 @@ class MidtransViewModel @Inject constructor() : ViewModel() {
         _isLoading.value = true
         viewModelScope.launch {
             try {
-                val response = RetrofitInstance.Transactionapi.getTransactionById(orderId)
-
-                if (response.isSuccess()) {
-                    val status = response.data?.transaction?.payment_status
-                    _paymentStatus.value = when (status?.lowercase()) {
-                        "settlement", "capture" -> PaymentStatus.SUCCESS
-                        "pending" -> PaymentStatus.PENDING
-                        "deny", "cancel", "expire", "failure" -> PaymentStatus.FAILED
-                        else -> PaymentStatus.PENDING
+                transactionRepository.getTransactionById(orderId).collect { result ->
+                    result.onSuccess { transaction ->
+                        _paymentStatus.value = when (transaction.payment_status?.lowercase()) {
+                            "settlement", "capture", "success" -> PaymentStatus.SUCCESS
+                            "pending" -> PaymentStatus.PENDING
+                            "deny", "cancel", "expire", "failure", "failed" -> PaymentStatus.FAILED
+                            else -> PaymentStatus.PENDING
+                        }
+                        _isLoading.value = false
+                        Log.d("MidtransViewModel", "Payment status: ${transaction.payment_status}")
+                    }.onFailure { error ->
+                        _errorMessage.value = error.localizedMessage ?: "Failed to check payment status"
+                        _isLoading.value = false
+                        Log.e("MidtransViewModel", "Error checking payment status", error)
                     }
-                } else {
-                    _errorMessage.value = response.error ?: "Failed to check payment status"
                 }
             } catch (e: Exception) {
-                Log.e("MidtransViewModel", "Error checking payment status", e)
+                Log.e("MidtransViewModel", "Exception checking payment status", e)
                 _errorMessage.value = "Failed to check payment status: ${e.message}"
-            } finally {
                 _isLoading.value = false
             }
         }

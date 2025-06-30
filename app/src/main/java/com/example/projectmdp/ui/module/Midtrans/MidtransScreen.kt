@@ -61,6 +61,25 @@ fun MidtransScreen(
         product?.price?.times(quantityState.value) ?: 0.0
     }
 
+    // Load product when productId is available
+    LaunchedEffect(productId) {
+        productId?.let { id ->
+            Log.d("MidtransScreen", "Loading product with ID: $id")
+            viewModel.loadProduct(id)
+        } ?: run {
+            Log.e("MidtransScreen", "ProductId is null!")
+        }
+    }
+
+    // Debug log when product changes
+    LaunchedEffect(product) {
+        product?.let {
+            Log.d("MidtransScreen", "Product loaded: ${it.name}, ID: ${it.product_id}")
+        } ?: run {
+            Log.d("MidtransScreen", "Product is null")
+        }
+    }
+
     // Handle error messages with toast
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
@@ -161,13 +180,29 @@ fun MidtransScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "Product not found or error loading payment details",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text(
+                                text = if (productId != null) {
+                                    "Product with ID $productId not found"
+                                } else {
+                                    "No product ID provided"
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                            
+                            Button(
+                                onClick = { navController.popBackStack() },
+                                modifier = Modifier.padding(horizontal = 32.dp)
+                            ) {
+                                Text("Go Back")
+                            }
+                        }
                     }
                 }
             }
@@ -244,52 +279,52 @@ fun ProductPaymentDetails(
         }
 
         // Quantity Selector
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Quantity",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+//        Card(
+//            modifier = Modifier.fillMaxWidth(),
+//            shape = RoundedCornerShape(12.dp),
+//            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+//        ) {
+//            Column(
+//                modifier = Modifier.padding(16.dp),
+//                verticalArrangement = Arrangement.spacedBy(8.dp)
+//            ) {
+//                Text(
+//                    text = "Quantity",
+//                    style = MaterialTheme.typography.titleMedium,
+//                    fontWeight = FontWeight.SemiBold
+//                )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Button(
-                        onClick = { if (quantity > 1) onQuantityChange(quantity - 1) },
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.width(48.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("-", fontSize = 20.sp)
-                    }
-
-                    Text(
-                        text = quantity.toString(),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Button(
-                        onClick = { onQuantityChange(quantity + 1) },
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.width(48.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("+", fontSize = 20.sp)
-                    }
-                }
-            }
-        }
+//                Row(
+//                    modifier = Modifier.fillMaxWidth(),
+//                    horizontalArrangement = Arrangement.SpaceBetween,
+//                    verticalAlignment = Alignment.CenterVertically
+//                ) {
+//                    Button(
+//                        onClick = { if (quantity > 1) onQuantityChange(quantity - 1) },
+//                        shape = RoundedCornerShape(8.dp),
+//                        modifier = Modifier.width(48.dp),
+//                        contentPadding = PaddingValues(0.dp)
+//                    ) {
+//                        Text("-", fontSize = 20.sp)
+//                    }
+//
+//                    Text(
+//                        text = quantity.toString(),
+//                        style = MaterialTheme.typography.titleLarge,
+//                        fontWeight = FontWeight.Bold
+//                    )
+//
+//                    Button(
+//                        onClick = { onQuantityChange(quantity + 1) },
+//                        shape = RoundedCornerShape(8.dp),
+//                        modifier = Modifier.width(48.dp),
+//                        contentPadding = PaddingValues(0.dp)
+//                    ) {
+//                        Text("+", fontSize = 20.sp)
+//                    }
+//                }
+//            }
+//        }
 
         // Total price section
         Card(
