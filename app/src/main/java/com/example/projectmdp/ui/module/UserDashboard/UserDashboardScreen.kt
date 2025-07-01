@@ -10,8 +10,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.ui.res.painterResource
 import com.example.projectmdp.R
 import androidx.compose.material3.*
@@ -35,12 +38,14 @@ import java.text.NumberFormat
 import java.util.Locale
 import androidx.navigation.compose.currentBackStackEntryAsState
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserDashboardScreen(
     viewModel: UserDashboardViewModel = viewModel(),
     navController: NavController,
     modifier: Modifier = Modifier
 ) {
+    // --- State dari ViewModel ---
     val searchQuery = viewModel.searchQuery
     val products = viewModel.products
     val userInitials = viewModel.userInitials
@@ -48,6 +53,8 @@ fun UserDashboardScreen(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     var showProfileMenu by remember { mutableStateOf(false) }
+    var showFilterBottomSheet by remember { mutableStateOf(false) }
+    val modalBottomSheetState = rememberModalBottomSheetState()
 
     LaunchedEffect(navBackStackEntry) {
         val shouldRefresh = navBackStackEntry?.savedStateHandle?.get<Boolean>("shouldRefreshDashboard")
@@ -60,6 +67,22 @@ fun UserDashboardScreen(
     LaunchedEffect(Unit) { // 'Unit' as a key ensures this block runs once when the Composable first enters the Composition
         Log.d("UserDashboard", "UserDashboardScreen initialized. Loading products initially.")
         viewModel.loadProducts(forceRefresh = true) // Load products immediately
+    }
+
+    // --- Tampilkan Filter Bottom Sheet jika diminta ---
+    if (showFilterBottomSheet) {
+        FilterBottomSheet(
+            sheetState = modalBottomSheetState,
+            onDismiss = { showFilterBottomSheet = false },
+            onApplyFilter = { category ->
+                viewModel.filterProductsByCategory(category)
+                showFilterBottomSheet = false
+            },
+            onClearFilter = {
+                viewModel.loadProducts(forceRefresh = true)
+                showFilterBottomSheet = false
+            }
+        )
     }
 
     Box(
@@ -85,7 +108,8 @@ fun UserDashboardScreen(
                     } else {
                         viewModel.searchProducts()
                     }
-                }
+                },
+                onFilterClick = { showFilterBottomSheet = true }
             )
 
             if (isLoading) {
@@ -114,9 +138,9 @@ fun UserDashboardScreen(
                         .fillMaxSize()
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(vertical = 16.dp)
+                    contentPadding = PaddingValues(top = 16.dp, bottom = 80.dp)
                 ) {
-                    items(products) { product ->
+                    items(products, key = { it.product_id }) { product ->
                         ProductCard(
                             product = product,
                             onProductClick = {
@@ -142,6 +166,10 @@ fun UserDashboardScreen(
                 onTransactionHistory = {
                     showProfileMenu = false
                     navController.navigate(Routes.TRANSACTION_HISTORY)
+                },
+                onAnalytics = {
+                    showProfileMenu = false
+                    navController.navigate(Routes.ANALYTICS)
                 },
                 onLogout = {
                     showProfileMenu = false
@@ -225,28 +253,43 @@ private fun TopBar(
 private fun SearchBar(
     searchQuery: String,
     onSearchChange: (String) -> Unit,
-    onSearchSubmit: () -> Unit
+    onSearchSubmit: () -> Unit,
+    onFilterClick: () -> Unit
 ) {
-    OutlinedTextField(
-        value = searchQuery,
-        onValueChange = onSearchChange,
-        placeholder = { Text("Search for products...") },
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        leadingIcon = {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = "Search"
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchChange,
+            placeholder = { Text("Search for products...") },
+            modifier = Modifier.weight(1f),
+            leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = "Search") },
+            shape = RoundedCornerShape(12.dp),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline
             )
-        },
-        shape = RoundedCornerShape(12.dp),
-        singleLine = true,
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline
         )
-    )
+        Spacer(modifier = Modifier.width(8.dp))
+        IconButton(
+            onClick = onFilterClick,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Tune,
+                contentDescription = "Filter Products",
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
 }
 
 @Composable
@@ -343,44 +386,101 @@ private fun ProductCard(
                         )
                     }
                 }
+            }
+        }
+    }
+}
 
-                Row(
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FilterBottomSheet(
+    sheetState: SheetState,
+    onDismiss: () -> Unit,
+    onApplyFilter: (String) -> Unit,
+    onClearFilter: () -> Unit
+) {
+    val categories = remember {
+        listOf("All Categories","Games", "Sword", "Vehicle", "Accessories", "Gadget & Technology", "Furniture", "Drone", "Other")
+    }
+    var selectedCategory by remember { mutableStateOf(categories.first()) }
+    var isCategoryDropdownExpanded by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Filter Options", style = MaterialTheme.typography.titleLarge)
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "Filter by Category",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            )
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = selectedCategory,
+                    onValueChange = {},
+                    label = { Text("Category") },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    readOnly = true,
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Open categories",
+                            Modifier.clickable { isCategoryDropdownExpanded = true }
+                        )
+                    }
+                )
+                DropdownMenu(
+                    expanded = isCategoryDropdownExpanded,
+                    onDismissRequest = { isCategoryDropdownExpanded = false },
+                    modifier = Modifier.fillMaxWidth(0.9f)
                 ) {
-//                    Button(
-//                        onClick = onBuyClick,
-//                        modifier = Modifier.weight(1f),
-//                        shape = RoundedCornerShape(8.dp),
-//                        colors = ButtonDefaults.buttonColors(
-//                            containerColor = MaterialTheme.colorScheme.primary
-//                        )
-//                    ) {
-//                        Icon(
-//                            imageVector = Icons.Default.ShoppingCart,
-//                            contentDescription = "Buy",
-//                            modifier = Modifier.size(16.dp)
-//                        )
-//                        Spacer(modifier = Modifier.width(4.dp))
-//                        Text("Buy", fontSize = 12.sp)
-//                    }
+                    categories.forEach { categoryOption ->
+                        DropdownMenuItem(
+                            text = { Text(categoryOption) },
+                            onClick = {
+                                selectedCategory = categoryOption
+                                isCategoryDropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(Color.Transparent)
+                        .clickable { isCategoryDropdownExpanded = true }
+                )
+            }
+            Spacer(modifier = Modifier.height(28.dp))
 
-//                    OutlinedButton(
-//                        onClick = onChatClick,
-//                        modifier = Modifier.weight(1f),
-//                        shape = RoundedCornerShape(8.dp),
-//                        colors = ButtonDefaults.outlinedButtonColors(
-//                            contentColor = MaterialTheme.colorScheme.primary
-//                        )
-//                    ) {
-//                        Icon(
-//                            painter = painterResource(id = R.drawable.chat_24px),
-//                            contentDescription = "Chat",
-//                            modifier = Modifier.size(16.dp)
-//                        )
-//                        Spacer(modifier = Modifier.width(4.dp))
-//                        Text("Chat", fontSize = 12.sp)
-//                    }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onClearFilter,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Clear")
+                }
+                Button(
+                    onClick = { onApplyFilter(selectedCategory) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Apply")
                 }
             }
         }
@@ -392,6 +492,7 @@ fun ProfileMenuPopup(
     onDismiss: () -> Unit,
     onEditProfile: () -> Unit,
     onTransactionHistory: () -> Unit,
+    onAnalytics: () -> Unit,
     onLogout: () -> Unit
 ) {
     Box(
@@ -424,11 +525,11 @@ fun ProfileMenuPopup(
                         horizontalArrangement = Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-//                        Icon(
-//                            painter = painterResource(id = R.drawable.person_24px),
-//                            contentDescription = "Edit Profile",
-//                            modifier = Modifier.size(20.dp)
-//                        )
+                        Icon(
+                            painter = painterResource(id = R.drawable.person_24px),
+                            contentDescription = "Edit Profile",
+                            modifier = Modifier.size(20.dp)
+                        )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text("Edit Profile")
                     }
@@ -456,6 +557,28 @@ fun ProfileMenuPopup(
                     }
                 }
 
+                TextButton(
+                    onClick = onAnalytics,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Analytics,
+                            contentDescription = "Analytics",
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Analytics")
+                    }
+                }
+
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 4.dp),
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
@@ -473,11 +596,11 @@ fun ProfileMenuPopup(
                         horizontalArrangement = Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-//                        Icon(
-//                            painter = painterResource(id = R.drawable.logout_24px),
-//                            contentDescription = "Logout",
-//                            modifier = Modifier.size(20.dp)
-//                        )
+                        Icon(
+                            painter = painterResource(id = R.drawable.logout_24px),
+                            contentDescription = "Logout",
+                            modifier = Modifier.size(20.dp)
+                        )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text("Logout")
                     }

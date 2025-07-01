@@ -123,7 +123,7 @@ fun com.example.projectmdp.data.source.response.Transaction.toTransactionEntity(
         email_buyer = this.email_buyer,
         product_id = productId,
         quantity = this.quantity,
-        total_price = this.total_price,
+        total_price = this.product!!.price!!,
         datetime = this.datetime,
         payment_id = this.payment_id,
         payment_status = this.payment_status,
@@ -210,10 +210,8 @@ class TransactionRepository @Inject constructor(
                         redirectUrl = responseData.redirect_url
                     )
 
-                    // Cache related user and product data
-                    cacheRelatedData(responseData.transaction)
-                    
-                    android.util.Log.d("TransactionRepository", "Transaction created successfully")
+
+                    android.util.Log.d("TransactionRepository", "Transaction created successfully ${result.transaction}")
                     emit(Result.success(result))
                 } ?: run {
                     android.util.Log.e("TransactionRepository", "No transaction data received")
@@ -261,6 +259,12 @@ class TransactionRepository @Inject constructor(
                     transactionDao.deleteAllTransactions() // Clear old cache
                     transactionDao.insertTransactions(transactionEntities)
                     android.util.Log.d("TransactionRepository", "Cached ${transactionEntities.size} transactions to local DB")
+                    
+                    // Log some sample cached data for debugging
+                    transactionEntities.take(3).forEach { entity ->
+                        android.util.Log.d("TransactionRepository", "Cached transaction - ID: ${entity.transaction_id}, " +
+                                "Buyer: ${entity.email_buyer}, Status: ${entity.payment_status}, Price: ${entity.total_price}")
+                    }
                     
                     // Cache related data
                     responseData.transactions.forEach { cacheRelatedData(it) }
@@ -324,8 +328,7 @@ class TransactionRepository @Inject constructor(
                     transactionDao.insertTransaction(transactionEntity)
                     
                     // Cache related data
-                    cacheRelatedData(responseData.transaction)
-                    
+
                     emit(Result.success(transaction))
                 } ?: emit(Result.failure(Exception("Transaction not found")))
             } else {
@@ -359,6 +362,7 @@ class TransactionRepository @Inject constructor(
                     seller = sellerUser,
                     product = productData
                 )
+                Log.d("CollectTransactionDetail", "Emitting transaction details: $details")
                 
                 emit(Result.success(details))
             }
@@ -381,7 +385,7 @@ class TransactionRepository @Inject constructor(
                         seller = transaction.seller,
                         product = transaction.product
                     )
-                    
+                    Log.d("CollectTransactionDetail", "Emitting transaction details: $details")
                     emit(Result.success(details))
                 } ?: emit(Result.failure(Exception("Transaction not found")))
             } else {
@@ -466,25 +470,78 @@ class TransactionRepository @Inject constructor(
     }
 
     private suspend fun cacheRelatedData(transaction: com.example.projectmdp.data.source.response.Transaction) {
-        // This would be implemented if you have UserDao and ProductDao
-        // For now, we assume the related data is cached by other repositories
+    }
+
+    // Debug functions for analytics troubleshooting
+    suspend fun debugAnalyticsData(userEmail: String): String {
+        val allTransactions = getAllCachedTransactions()
+        val buyerTransactions = transactionDao.getBuyerTransactions(userEmail)
+        val sellerTransactions = allTransactions.filter { entity ->
+            // Check if user is seller by trying to find user data
+            val seller = transactionDao.getUserById(entity.user_seller_id)
+            seller?.email == userEmail
+        }
+        
+        val buyerTotal = transactionDao.getBuyerTotalSpent(userEmail) ?: 0.0
+        val buyerCount = transactionDao.getBuyerTransactionCount(userEmail)
+        
+        val sellerId = sellerTransactions.firstOrNull()?.user_seller_id ?: ""
+        val sellerTotal = if (sellerId.isNotEmpty()) {
+            transactionDao.getSellerTotalEarned(sellerId) ?: 0.0
+        } else 0.0
+        val sellerCount = if (sellerId.isNotEmpty()) {
+            transactionDao.getSellerTransactionCount(sellerId)
+        } else 0
+        
+        return """
+        Debug Analytics Data for: $userEmail
+        ========================================
+        Total cached transactions: ${allTransactions.size}
+        Buyer transactions count: ${buyerTransactions.size}
+        Seller transactions count: ${sellerTransactions.size}
+        Seller ID found: $sellerId
+        
+        Repository Query Results:
+        - Buyer total spent: $buyerTotal
+        - Buyer transaction count: $buyerCount
+        - Seller total earned: $sellerTotal
+        - Seller transaction count: $sellerCount
+        
+        Buyer Transactions Details:
+        ${buyerTransactions.take(5).joinToString("\n") { 
+            "- ID: ${it.transaction_id}, Status: ${it.payment_status}, Price: ${it.total_price}" 
+        }}
+        
+        Seller Transactions Details:
+        ${sellerTransactions.take(5).joinToString("\n") { 
+            "- ID: ${it.transaction_id}, Status: ${it.payment_status}, Price: ${it.total_price}" 
+        }}
+        """.trimIndent()
     }
 
     // Statistics and Analytics
     suspend fun getBuyerTransactionCount(buyerEmail: String): Int {
-        return transactionDao.getBuyerTransactionCount(buyerEmail)
+        val result = transactionDao.getBuyerTransactionCount(buyerEmail)
+        android.util.Log.d("TransactionRepository", "getBuyerTransactionCount($buyerEmail) = $result")
+        return result
     }
 
     suspend fun getSellerTransactionCount(sellerId: String): Int {
-        return transactionDao.getSellerTransactionCount(sellerId)
+        val result = transactionDao.getSellerTransactionCount(sellerId)
+        android.util.Log.d("TransactionRepository", "getSellerTransactionCount($sellerId) = $result")
+        return result
     }
 
     suspend fun getBuyerTotalSpent(buyerEmail: String): Double {
-        return transactionDao.getBuyerTotalSpent(buyerEmail) ?: 0.0
+        val result = transactionDao.getBuyerTotalSpent(buyerEmail) ?: 0.0
+        android.util.Log.d("TransactionRepository", "getBuyerTotalSpent($buyerEmail) = $result")
+        return result
     }
 
     suspend fun getSellerTotalEarned(sellerId: String): Double {
-        return transactionDao.getSellerTotalEarned(sellerId) ?: 0.0
+        val result = transactionDao.getSellerTotalEarned(sellerId) ?: 0.0
+        android.util.Log.d("TransactionRepository", "getSellerTotalEarned($sellerId) = $result")
+        return result
     }
 
     // Cache Management

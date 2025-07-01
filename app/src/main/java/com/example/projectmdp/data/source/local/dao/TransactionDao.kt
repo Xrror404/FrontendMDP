@@ -105,10 +105,10 @@ interface TransactionDao {
     @Query("SELECT COUNT(*) FROM transactions WHERE user_seller_id = :sellerId")
     suspend fun getSellerTransactionCount(sellerId: String): Int
     
-    @Query("SELECT SUM(total_price) FROM transactions WHERE email_buyer = :buyerEmail AND payment_status = 'completed'")
+    @Query("SELECT SUM(total_price) FROM transactions WHERE email_buyer = :buyerEmail AND LOWER(payment_status) IN ('completed', 'settlement', 'capture', 'success')")
     suspend fun getBuyerTotalSpent(buyerEmail: String): Double?
     
-    @Query("SELECT SUM(total_price) FROM transactions WHERE user_seller_id = :sellerId AND payment_status = 'completed'")
+    @Query("SELECT SUM(total_price) FROM transactions WHERE user_seller_id = :sellerId AND LOWER(payment_status) IN ('completed', 'settlement', 'capture', 'success')")
     suspend fun getSellerTotalEarned(sellerId: String): Double?
 
 

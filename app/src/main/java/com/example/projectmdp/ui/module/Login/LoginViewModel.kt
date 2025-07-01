@@ -61,6 +61,7 @@ class LoginViewModel @Inject constructor(
     }
 
     fun checkAutoLogin() {
+        isLoading = true
         val savedToken = sessionManager.getToken()
         if (!savedToken.isNullOrBlank()) {
             Log.d("AutoLogin", "Saved token found: $savedToken")
@@ -71,15 +72,17 @@ class LoginViewModel @Inject constructor(
                     val response = authRepository.verifyToken(VerifyTokenRequest(savedToken))
                     val userRole = response.data?.user?.role
                     _navigationEvent.emit(Routes.USER_DASHBOARD)
-
+                    isLoading = false
                 } catch (e: Exception) {
                     Log.e("AutoLogin", "Failed: ${e.message}")
                     // Jika token tidak valid, bisa clear dari session
                     sessionManager.clearToken()
+                    isLoading = false
                 }
             }
         } else {
             Log.d("AutoLogin", "No token found")
+            isLoading = false
         }
     }
 

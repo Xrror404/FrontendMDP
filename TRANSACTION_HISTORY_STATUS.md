@@ -36,6 +36,15 @@
   - API response menggunakan field "id" untuk product ID
   - Data class sudah disesuaikan dengan `@SerializedName("id")`
 
+### 5. TransactionDetailScreen (NEW FEATURE)
+- ✅ **NEW: Complete Transaction Detail View**
+  - Clickable transaction cards di Transaction History
+  - Comprehensive detail view dengan semua information transaksi
+  - Product information dengan image dan details
+  - Seller information dengan profile
+  - Payment information dengan Midtrans details
+  - Real-time status updates dengan proper color coding
+
 ## Alur Kerja Transaction History
 
 1. **Screen Load**:
@@ -119,6 +128,19 @@
 ### Test 4: Success State
 - User yang sudah pernah bertransaksi
 - Harus muncul list transaksi dengan detail lengkap
+
+### Test 5: Transaction Detail Navigation (NEW)
+- Tap pada transaction card di Transaction History
+- Harus navigate ke Transaction Detail Screen
+- Harus menampilkan semua detail transaksi dengan benar
+- Back button harus kembali ke Transaction History
+
+### Test 6: Transaction Detail Content (NEW)
+- Product information dengan image dan price
+- Seller information dengan profile dan contact
+- Payment information dengan total dan method
+- Midtrans details jika ada (VA number, order ID, etc.)
+- Transaction status dengan proper color coding
 
 ## Navigation Setup
 

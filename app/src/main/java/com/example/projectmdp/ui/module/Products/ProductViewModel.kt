@@ -15,7 +15,6 @@ import com.example.projectmdp.data.source.dataclass.User
 import com.example.projectmdp.data.source.local.SessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -80,12 +79,24 @@ class ProductViewModel @Inject constructor(
 
         viewModelScope.launch {
             val userId = _selectedProduct.value?.user_id
+            Log.d("ProductViewModel", "Trying to fetch seller with user_id: $userId")
+
             if (userId != null) {
                 userRepository.getUserById(userId).collect { result ->
                     _isLoading.value = false
 
                     result.onSuccess { user ->
-                        _selectedProductSeller.value = user
+                        Log.d("ProductViewModel", "Fetched seller: ${user.username} - Id: ${user.id}")
+                        userRepository.getUserById(sessionManager.getUserId().toString()).collect { userResult ->
+                            userResult.onSuccess { currentUser ->
+                                Log.d(
+                                    "ProductViewModel",
+                                    "Current User: ${currentUser.username} - Id: ${currentUser.id} - Address: ${currentUser.address}"
+                                )
+                                _selectedProductSeller.value = user
+                            }
+                        }
+//                        _selectedProductSeller.value = user
                         _errorMessage.value = null
                     }.onFailure { throwable ->
                         _errorMessage.value = throwable.message ?: "Failed to load seller information."
@@ -188,34 +199,38 @@ class ProductViewModel @Inject constructor(
         description: String,
         price: Double,
         category: String,
-        imageUri: Uri? // Pass imageUri from Composable
+        imageUri: Uri? // Anda sudah menerima Uri di sini
     ) {
         _isLoading.value = true
         _errorMessage.value = null
-        _productUpdateSuccess.value = false // Use the new update success LiveData
+        _productUpdateSuccess.value = false
 
         viewModelScope.launch {
+            // Panggil repository dengan SEMUA parameter yang diperlukan
             productRepository.updateProduct(
-                productId,
-                name,
-                description,
-                price,
-                category,
-                imageUri // Pass imageUri
+                applicationContext,
+                productId,     // Parameter 2: productId
+                name,          // Parameter 3: name
+                description,   // Parameter 4: description
+                price,         // Parameter 5: price (sebagai Double)
+                category,      // Parameter 6: category
+                imageUri       // <-- PERBAIKAN DI SINI: Teruskan imageUri
             ).collect { result ->
                 _isLoading.value = false
-                result.onSuccess { updatedProduct ->
-                    _errorMessage.value = null
-                    _productUpdateSuccess.value = true
-                    _selectedProduct.value = updatedProduct // Update selected product LiveData
-                }.onFailure { throwable ->
-                    _errorMessage.value = throwable.message ?: "Failed to update product."
-                    _productUpdateSuccess.value = false
-                }
+                result.fold(
+                    onSuccess = { updatedProduct ->
+                        _errorMessage.value = null
+                        _productUpdateSuccess.value = true
+                        _selectedProduct.value = updatedProduct
+                    },
+                    onFailure = { throwable ->
+                        _errorMessage.value = throwable.message ?: "Failed to update product."
+                        _productUpdateSuccess.value = false
+                    }
+                )
             }
         }
     }
-
     fun resetProductCreationStatus() {
         _productCreationSuccess.value = false
         // Also reset product update status if they share the same success UI message/navigation logic

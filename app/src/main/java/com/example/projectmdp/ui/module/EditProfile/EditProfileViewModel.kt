@@ -1,5 +1,6 @@
 package com.example.projectmdp.ui.module.EditProfile
 
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -7,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.projectmdp.data.repository.UserRepository
 import com.example.projectmdp.data.source.dataclass.User
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,7 +31,8 @@ data class EditProfileUiState(
 
 @HiltViewModel
 class EditProfileViewModel @Inject constructor(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(EditProfileUiState())
@@ -81,16 +84,17 @@ class EditProfileViewModel @Inject constructor(
     fun updateProfilePicture(imageUri: Uri) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isUpdatingPicture = true, errorMessage = null)
+            Log.d("EditProfileViewModel", "Starting profile picture update with URI: $imageUri")
             
-            userRepository.updateProfilePicture(imageUri).collectLatest { result ->
-                result.onSuccess { updatedUser ->
+            userRepository.updateProfilePicture(context, imageUri).collectLatest { result ->
+                result.onSuccess { updatedProfilePictureUrl ->
                     _uiState.value = _uiState.value.copy(
                         isUpdatingPicture = false,
-                        profilePictureUrl = updatedUser,
+                        profilePictureUrl = updatedProfilePictureUrl,
                         saveSuccess = true,
                         errorMessage = null
                     )
-                    Log.d("EditProfileViewModel", "Profile picture updated successfully")
+                    Log.d("EditProfileViewModel", "Profile picture updated successfully: $updatedProfilePictureUrl")
                 }.onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isUpdatingPicture = false,

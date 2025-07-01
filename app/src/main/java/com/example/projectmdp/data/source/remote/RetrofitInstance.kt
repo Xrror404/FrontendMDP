@@ -15,20 +15,20 @@ object RetrofitInstance {
         token = newToken
     }
 
-    private val authInterceptor = Interceptor { chain ->
-        val originalRequest = chain.request()
-        val builder = originalRequest.newBuilder()
-
-        token?.let {
-            builder.addHeader("Authorization", "Bearer $it")
-        }
-
-        val newRequest = builder.build()
-        chain.proceed(newRequest)
-    }
+//    private val authInterceptor = Interceptor { chain ->
+//        val originalRequest = chain.request()
+//        val builder = originalRequest.newBuilder()
+//
+//        token?.let {
+//            builder.addHeader("Authorization", "Bearer $it")
+//        }
+//
+//        val newRequest = builder.build()
+//        chain.proceed(newRequest)
+//    }
 
     private val okHttpClient = OkHttpClient.Builder()
-        .addInterceptor(authInterceptor)
+        .addInterceptor(AuthInterceptor())
         .build()
 
 //    https://pouncing-rune-lord.glitch.me

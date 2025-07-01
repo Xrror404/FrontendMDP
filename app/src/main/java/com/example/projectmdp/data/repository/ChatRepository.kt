@@ -1,15 +1,21 @@
 package com.example.projectmdp.data.repository
 
 import android.util.Log
+import androidx.lifecycle.viewModelScope
 import com.example.projectmdp.data.source.dataclass.ChatMessage
 import com.example.projectmdp.data.source.dataclass.ChatPagination
 import com.example.projectmdp.data.source.dataclass.Conversation
 import com.example.projectmdp.data.source.dataclass.User
+import com.example.projectmdp.data.source.local.SessionManager
 import com.example.projectmdp.data.source.remote.ChatApi
 import com.example.projectmdp.data.source.remote.RetrofitInstance
+import com.example.projectmdp.data.source.remote.VerifyTokenRequest
 import com.example.projectmdp.data.source.response.*
+import com.example.projectmdp.navigation.Routes
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -91,6 +97,7 @@ fun com.example.projectmdp.data.source.response.OtherUser.toChatUser(): User {
 @Singleton
 class ChatRepository @Inject constructor(
 //    private val chatApi: ChatApi // Commented out
+    private val sessionManager: SessionManager
 ) {
 
     suspend fun getUserConversations(): Flow<Result<List<Conversation>>> = flow { // Returns dataclass.Conversation

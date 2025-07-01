@@ -6,6 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.projectmdp.data.model.auth.RegisterDto
 import com.example.projectmdp.data.repository.AuthRepository
+import com.example.projectmdp.data.repository.UserRepository
+import com.example.projectmdp.data.source.dataclass.User
+import com.example.projectmdp.data.source.remote.RetrofitInstance
 import com.example.projectmdp.data.source.remote.VerifyTokenRequest
 import com.example.projectmdp.navigation.Routes
 import com.google.firebase.auth.FirebaseAuth
@@ -15,12 +18,14 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val userRepository: UserRepository
 ) : ViewModel() {
     var email by mutableStateOf("")
     //        private set
@@ -46,6 +51,8 @@ class RegisterViewModel @Inject constructor(
     // Add navigation event for successful registration
     private val _navigationEvent = MutableSharedFlow<String>()
     val navigationEvent = _navigationEvent.asSharedFlow()
+
+    var updateResult by mutableStateOf<Result<User>?>(null)
 
     fun onEmailChange(newEmail: String) { email = newEmail }
     fun onPasswordChange(newPassword: String) { password = newPassword }
@@ -86,8 +93,18 @@ class RegisterViewModel @Inject constructor(
                                     try {
                                         // Kirim ID Token ke backend sesuai endpoint verifyFirebaseToken
                                         val response = authRepository.verifyToken(VerifyTokenRequest(idToken))
-                                        Log.d("BackendRegister", "Success: $response")
-
+                                        Log.d("BackendRegister", "Success Authenticate: $response")
+                                        Log.d("Register", "address=$address, phoneNumber=$phoneNumber")
+                                        RetrofitInstance.setToken(idToken)
+                                        userRepository.updateUserProfile(
+                                            address = address,
+                                            phoneNumber = phoneNumber
+                                        ).collect { result ->
+                                            Log.d("BackendRegister", "update result: $result")
+                                            updateResult = result
+                                        }
+//                                        val updateDataUser = userRepository.updateUserProfile(address = address, phoneNumber = phoneNumber)
+//                                        Log.d("BackendRegister", "Success Add Address and Phone: $updateDataUser")
                                         // Navigate to login screen after successful registration
                                         _navigationEvent.emit(Routes.LOGIN)
                                     } catch (e: Exception) {

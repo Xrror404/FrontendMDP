@@ -2,6 +2,7 @@ package com.example.projectmdp.ui.module.TransactionHistory
 
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -164,7 +165,16 @@ fun TransactionHistoryScreen(
                         }
                         
                         items(uiState.transactions) { transaction ->
-                            TransactionCard(transaction, currencyFormat, dateFormat)
+                            TransactionCard(
+                                transaction = transaction,
+                                currencyFormat = currencyFormat,
+                                dateFormat = dateFormat,
+                                onTransactionClick = {
+                                    navController.navigate(
+                                        com.example.projectmdp.navigation.Routes.transactionDetailRoute(transaction.transaction_id)
+                                    )
+                                }
+                            )
                         }
                     }
                 }
@@ -177,12 +187,15 @@ fun TransactionHistoryScreen(
 private fun TransactionCard(
     transaction: Transaction,
     currencyFormat: NumberFormat,
-    dateFormat: SimpleDateFormat
+    dateFormat: SimpleDateFormat,
+    onTransactionClick: () -> Unit
 ) {
     val context = LocalContext.current
     
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onTransactionClick() },
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -266,14 +279,24 @@ private fun TransactionCard(
                     )
                 }
 
+                val isoDateFormat = remember {
+                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault()).apply {
+                        timeZone = TimeZone.getTimeZone("UTC")
+                    }
+                }
+
                 Column(horizontalAlignment = Alignment.End) {
                     Text("Date", style = MaterialTheme.typography.bodySmall)
 
-                        val date = Date(transaction.datetime.toLongOrNull() ?: 0L)
-                        Text(
-                            text = dateFormat.format(date),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                    val date = try {
+                        isoDateFormat.parse(transaction.datetime)
+                    } catch (e: Exception) {
+                        null
+                    }
+                    Text(
+                        text = date?.let { dateFormat.format(it) } ?: "-",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
 
                 }
             }

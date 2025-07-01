@@ -34,6 +34,7 @@ class ChatListViewModel @Inject constructor(
             chatRepository.getUserConversations().collect { result: Result<List<com.example.projectmdp.data.source.dataclass.Conversation>> -> // Explicitly typed
                 result.onSuccess { list: List<Conversation> -> // Explicitly typed
                     Log.d("ChatListViewModel", "Received conversations: $list")
+                    Log.d("loadConversations", "Fetched: ${list.map { it.lastMessage }}")
                     val items = list.map { conversation ->
                         ConversationItem(
                             otherUserId = conversation.otherUserId,

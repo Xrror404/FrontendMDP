@@ -386,39 +386,39 @@ fun ProductPaymentDetails(
         }
 
         // Information about Midtrans Sandbox
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                    shape = RoundedCornerShape(12.dp)
-                ),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Midtrans Sandbox Test Environment",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-
-                Text(
-                    text = "This is a test payment using Midtrans Sandbox. No actual charges will be made.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-
-                Text(
-                    text = "For testing, use these credit card details: \nCard Number: 4811 1111 1111 1114 \nCVV: 123 \nExp: Any future date",
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-        }
+//        Card(
+//            modifier = Modifier
+//                .fillMaxWidth()
+//                .border(
+//                    width = 1.dp,
+//                    color = MaterialTheme.colorScheme.outlineVariant,
+//                    shape = RoundedCornerShape(12.dp)
+//                ),
+//            shape = RoundedCornerShape(12.dp),
+//            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+//        ) {
+//            Column(
+//                modifier = Modifier.padding(16.dp),
+//                verticalArrangement = Arrangement.spacedBy(8.dp)
+//            ) {
+//                Text(
+//                    text = "Midtrans Sandbox Test Environment",
+//                    style = MaterialTheme.typography.titleSmall,
+//                    fontWeight = FontWeight.SemiBold,
+//                )
+//
+//                Text(
+//                    text = "This is a test payment using Midtrans Sandbox. No actual charges will be made.",
+//                    style = MaterialTheme.typography.bodySmall,
+//                )
+//
+//                Text(
+//                    text = "For testing, use these credit card details: \nCard Number: 4811 1111 1111 1114 \nCVV: 123 \nExp: Any future date",
+//                    style = MaterialTheme.typography.bodySmall,
+//                    modifier = Modifier.padding(top = 8.dp)
+//                )
+//            }
+//        }
 
         Spacer(modifier = Modifier.height(16.dp))
 

@@ -23,12 +23,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.projectmdp.data.source.dataclass.ChatMessage
-import com.example.projectmdp.data.source.dataclass.User
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,12 +42,26 @@ fun ChatScreen(
 ) {
     var messageText by remember { mutableStateOf("") }
 
-    // One-time setup to load messages and set current user
+    // --- Start of Modified Section ---
     LaunchedEffect(receiverId, currentUserId) {
-        Log.d("Chat Screen", "Current user id : $currentUserId")
+        Log.d("Chat Screen", "Current user Firebase UID : $currentUserId")
+
         viewModel.setCurrentUserId(currentUserId)
-        viewModel.loadConversation(receiverId)
+
+        // 2. Wait for the ViewModel to successfully load the current user's database ID.
+        // We use snapshotFlow to observe the currentUser state and filter for non-null id.
+        // .first() ensures this block only executes once after the ID is available.
+        val dbUserId = snapshotFlow { viewModel.currentUser.value?.id }
+            .filterNotNull() // Only proceed when the ID is available
+            .first() // Get the first non-null ID and then stop observing
+
+        Log.d("Chat Screen", "Current user DB ID ready: $dbUserId. Starting chat conversation.")
+
+        // 3. Once the current user's database ID is known, start the conversation.
+        // This function in the ViewModel now handles both initial load and periodic refreshing.
+        viewModel.startChatConversation(receiverId)
     }
+    // --- End of Modified Section ---
 
     val messages = viewModel.messages
     val isSending = viewModel.isSending
@@ -88,7 +103,8 @@ fun ChatScreen(
                     verticalArrangement = Arrangement.Bottom,
                     reverseLayout = true
                 ) {
-                    items(messages.sortedByDescending { it.datetime }) { message ->
+                    // Sorting here is crucial if your ViewModel doesn't guarantee order
+                    items(messages.sortedByDescending { it.datetime }, key = { it.id }) { message ->
                         ChatMessageItem(
                             message = message,
                             isFromCurrentUser = viewModel.isMessageFromCurrentUser(message),
@@ -178,9 +194,9 @@ private fun ChatHeader(
                     )
 
                 }
-                
+
                 Spacer(modifier = Modifier.width(12.dp))
-                
+
                 // User info
                 Column {
                     Text(
@@ -221,7 +237,7 @@ private fun ChatMessageItem(
 ) {
     // Debug logging
     Log.d("ChatMessageItem", "Message ${message.id}: isFromCurrentUser=$isFromCurrentUser, sender=${message.user_sender}, senderName=$senderName")
-    
+
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (isFromCurrentUser) Arrangement.End else Arrangement.Start
@@ -242,7 +258,7 @@ private fun ChatMessageItem(
             )
             Spacer(modifier = Modifier.width(8.dp))
         }
-        
+
         // Message bubble
         Card(
             modifier = Modifier
@@ -276,7 +292,7 @@ private fun ChatMessageItem(
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
-                
+
                 // Message text
                 Text(
                     text = message.chat,
@@ -284,9 +300,9 @@ private fun ChatMessageItem(
                     color = if (isFromCurrentUser) Color.White else Color.Black,
                     lineHeight = 18.sp
                 )
-                
+
                 Spacer(modifier = Modifier.height(4.dp))
-                
+
                 // Time and status
                 Row(
                     horizontalArrangement = Arrangement.End,
@@ -302,7 +318,7 @@ private fun ChatMessageItem(
                             Color.Gray
                         }
                     )
-                    
+
                     if (isFromCurrentUser) {
                         Spacer(modifier = Modifier.width(4.dp))
                         // Message status (sent, delivered, read)
@@ -314,7 +330,7 @@ private fun ChatMessageItem(
                 }
             }
         }
-        
+
         if (isFromCurrentUser) {
             Spacer(modifier = Modifier.width(8.dp))
             // Placeholder untuk profile picture current user (bisa ditambahkan jika perlu)
@@ -348,6 +364,13 @@ private fun MessageStatusIcon(
                 text = "✓✓",
                 fontSize = 10.sp,
                 color = Color.Blue
+            )
+        }
+        "sending" -> { // Added status for optimistic update
+            Text(
+                text = "...",
+                fontSize = 10.sp,
+                color = color
             )
         }
     }
@@ -386,9 +409,9 @@ private fun ChatInputArea(
                     unfocusedBorderColor = Color.Gray.copy(alpha = 0.5f)
                 )
             )
-            
+
             Spacer(modifier = Modifier.width(8.dp))
-            
+
             // Send button
             FloatingActionButton(
                 onClick = onSendMessage,
@@ -434,6 +457,6 @@ fun MessageBubble(text: String, isUser: Boolean) {
                 text = text,
                 modifier = Modifier.padding(8.dp)
             )
+            }
         }
-    }
 }

@@ -160,7 +160,6 @@ private fun ProfilePictureSection(
     onImageSelected: (Uri) -> Unit
 ) {
     val context = LocalContext.current
-    var showImagePicker by remember { mutableStateOf(false) }
     
     // Image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -224,7 +223,11 @@ private fun ProfilePictureSection(
 
         // Edit button
         FloatingActionButton(
-            onClick = { showImagePicker = true },
+            onClick = { 
+                if (!isUpdating) {
+                    imagePickerLauncher.launch("image/*")
+                }
+            },
             modifier = Modifier.align(Alignment.BottomEnd),
             containerColor = if (isUpdating) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) 
                             else MaterialTheme.colorScheme.primary
@@ -237,60 +240,6 @@ private fun ProfilePictureSection(
             )
         }
     }
-
-    // Image picker dialog
-    if (showImagePicker) {
-        ImagePickerDialog(
-            onDismiss = { showImagePicker = false },
-            onImageSelected = { uri ->
-                onImageSelected(uri)
-                showImagePicker = false
-            }
-        )
-    }
-}
-
-@Composable
-private fun ImagePickerDialog(
-    onDismiss: () -> Unit,
-    onImageSelected: (Uri) -> Unit
-) {
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { onImageSelected(it) }
-        onDismiss()
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Choose Profile Picture") },
-        text = { Text("Select a new profile picture from your device gallery") },
-        confirmButton = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                TextButton(
-                    onClick = {
-                        imagePickerLauncher.launch("image/*")
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PhotoLibrary,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Gallery")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
 }
 
 @Composable

@@ -1,5 +1,6 @@
 package com.example.projectmdp.ui.module.chat
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,6 +24,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.projectmdp.ui.module.chat.ChatListViewModel
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import java.util.TimeZone
 
 data class UserItem(
     val id: String,
@@ -117,9 +123,55 @@ fun ConversationCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            val isoDateFormat = remember {
+                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }
+            }
+
+            val date = try {
+                isoDateFormat.parse(conversation.lastMessageTime)
+            } catch (e: Exception) {
+                Log.e("TransactionDetail", "Error parsing date: ${conversation.lastMessageTime}", e)
+                null
+            }
+            val displayDate = remember(conversation.lastMessageTime) {
+                date?.let {
+                    val cal = Calendar.getInstance()
+                    val today = Calendar.getInstance()
+
+                    cal.time = it
+
+                    val dateFormatSameYear = SimpleDateFormat("MMM dd", Locale.getDefault()) // contoh: Jun 30
+                    val dateFormatFull = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+
+                    return@remember when {
+                        // Hari ini
+                        today.get(Calendar.YEAR) == cal.get(Calendar.YEAR) &&
+                                today.get(Calendar.DAY_OF_YEAR) == cal.get(Calendar.DAY_OF_YEAR) -> {
+                            "Today"
+                        }
+
+                        // Kemarin
+                        today.get(Calendar.YEAR) == cal.get(Calendar.YEAR) &&
+                                today.get(Calendar.DAY_OF_YEAR) - cal.get(Calendar.DAY_OF_YEAR) == 1 -> {
+                            "Yesterday"
+                        }
+
+                        // Tahun ini → tampilkan tgl singkat
+                        today.get(Calendar.YEAR) == cal.get(Calendar.YEAR) -> {
+                            dateFormatSameYear.format(it)
+                        }
+
+                        // Tahun berbeda
+                        else -> dateFormatFull.format(it)
+                    }
+                } ?: ""
+            }
+
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = conversation.lastMessageTime, // already formatted
+                text = displayDate, // already formatted
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
